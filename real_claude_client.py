@@ -15,7 +15,7 @@ from typing import Dict, List, Any, Optional
 sys.path.append('backend')
 
 from claude_dynamodb_driver import call_function, FUNCTION_REGISTRY  # type: ignore
-from claude_mongodb_driver import call_mongodb_function, MONGODB_FUNCTION_REGISTRY  # type: ignore
+from claude_supabase_driver import call_supabase_function, SUPABASE_FUNCTION_REGISTRY  # type: ignore
 
 class RealClaudeAPIClient:
     """Real Claude API client using official Anthropic library"""
@@ -28,96 +28,7 @@ class RealClaudeAPIClient:
         """Create function tool definitions for Claude"""
         tools = []
 
-        # MongoDB function definitions - Enhanced with complex operations
-        mongodb_functions = {
-            "create_collection_simple": {
-                "name": "create_collection_simple",
-                "description": "Create a simple MongoDB collection with basic indexes",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "collection_name": {"type": "string", "description": "Name of the collection"},
-                        "indexes": {"type": "array", "items": {"type": "string"}, "description": "List of index fields"},
-                        "database_name": {"type": "string", "description": "Database name prefix (optional)"}
-                    },
-                    "required": ["collection_name", "indexes"]
-                }
-            },
-            "create_collection_advanced": {
-                "name": "create_collection_advanced",
-                "description": "Create MongoDB collection with advanced features (compound indexes, unique constraints, sparse indexes, TTL, text search, geospatial)",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "collection_schema": {
-                            "type": "object",
-                            "description": "Complete MongoDB collection schema with compound indexes, unique constraints, sparse indexes, text search, TTL indexes"
-                        },
-                        "database_name": {"type": "string", "description": "Database name prefix (optional)"}
-                    },
-                    "required": ["collection_schema"]
-                }
-            },
-            "create_index": {
-                "name": "create_index",
-                "description": "Create a specific index on an existing MongoDB collection (compound, unique, sparse, text, geospatial, TTL)",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "collection_name": {"type": "string", "description": "Name of the collection"},
-                        "index_definition": {
-                            "type": "object",
-                            "description": "Complex index definition with keys, name, unique, sparse, ttl, text, 2dsphere, etc."
-                        },
-                        "database_name": {"type": "string", "description": "Database name prefix (optional)"}
-                    },
-                    "required": ["collection_name", "index_definition"]
-                }
-            },
-            "query_collection": {
-                "name": "query_collection",
-                "description": "Advanced MongoDB query with aggregation pipeline, filters, sorting, projection, pagination, and analytics",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "collection_name": {"type": "string", "description": "Name of the collection to query"},
-                        "query": {"type": "object", "description": "MongoDB query filter with advanced operators"},
-                        "projection": {"type": "object", "description": "Fields to include/exclude in results"},
-                        "sort": {"type": "object", "description": "Sort specification"},
-                        "database_name": {"type": "string", "description": "Database name prefix (optional)"},
-                        "limit": {"type": "integer", "description": "Maximum number of documents to return"},
-                        "skip": {"type": "integer", "description": "Number of documents to skip for pagination"}
-                    },
-                    "required": ["collection_name", "query"]
-                }
-            },
-            "insert_document": {
-                "name": "insert_document",
-                "description": "Insert a single document into MongoDB collection",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "collection_name": {"type": "string", "description": "Name of the collection"},
-                        "document": {"type": "object", "description": "Document to insert"},
-                        "database_name": {"type": "string", "description": "Database name prefix (optional)"}
-                    },
-                    "required": ["collection_name", "document"]
-                }
-            },
-            "list_collections": {
-                "name": "list_collections",
-                "description": "List all collections in a MongoDB database with metadata",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "database_name": {"type": "string", "description": "Database name (optional)"}
-                    },
-                    "required": []
-                }
-            }
-        }
-        
-
+        # DynamoDB function definitions only
         
         # DynamoDB function definitions
         dynamodb_functions = {
@@ -252,11 +163,106 @@ class RealClaudeAPIClient:
             }
         }
         
+        # Supabase PostgreSQL function definitions
+        supabase_functions = {
+            "create_table_postgres": {
+                "name": "create_table_postgres",
+                "description": "Create a PostgreSQL table from SQL schema on Supabase",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "table_schema": {"type": "string", "description": "SQL CREATE TABLE statement"},
+                        "database_name": {"type": "string", "description": "Database name (optional)"}
+                    },
+                    "required": ["table_schema"]
+                }
+            },
+            "insert_row_postgres": {
+                "name": "insert_row_postgres",
+                "description": "Insert a row into a PostgreSQL table",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "table_name": {"type": "string", "description": "Name of the table"},
+                        "row_data": {"type": "object", "description": "Data to insert as key-value pairs"}
+                    },
+                    "required": ["table_name", "row_data"]
+                }
+            },
+            "query_table_postgres": {
+                "name": "query_table_postgres",
+                "description": "Query PostgreSQL table with filters",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "table_name": {"type": "string", "description": "Name of the table to query"},
+                        "filters": {"type": "object", "description": "Filter conditions as key-value pairs"},
+                        "columns": {"type": "string", "description": "Columns to select (default: *)"},
+                        "limit": {"type": "integer", "description": "Maximum number of rows to return"},
+                        "offset": {"type": "integer", "description": "Number of rows to skip"}
+                    },
+                    "required": ["table_name"]
+                }
+            },
+            "update_row_postgres": {
+                "name": "update_row_postgres",
+                "description": "Update rows in PostgreSQL table",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "table_name": {"type": "string", "description": "Name of the table"},
+                        "filters": {"type": "object", "description": "Filter conditions for rows to update"},
+                        "update_data": {"type": "object", "description": "Data to update"}
+                    },
+                    "required": ["table_name", "filters", "update_data"]
+                }
+            },
+            "delete_row_postgres": {
+                "name": "delete_row_postgres",
+                "description": "Delete rows from PostgreSQL table",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "table_name": {"type": "string", "description": "Name of the table"},
+                        "filters": {"type": "object", "description": "Filter conditions for rows to delete"}
+                    },
+                    "required": ["table_name", "filters"]
+                }
+            },
+            "list_tables_postgres": {
+                "name": "list_tables_postgres",
+                "description": "List all tables in PostgreSQL database",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            "get_table_info_postgres": {
+                "name": "get_table_info_postgres",
+                "description": "Get detailed information about a PostgreSQL table",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "table_name": {"type": "string", "description": "Name of the table"}
+                    },
+                    "required": ["table_name"]
+                }
+            },
+            "validate_supabase_credentials": {
+                "name": "validate_supabase_credentials",
+                "description": "Validate Supabase credentials",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        }
+        
         # Convert to Claude tool format
-        for func_name, func_def in mongodb_functions.items():
+        for func_name, func_def in dynamodb_functions.items():
             tools.append(func_def)
         
-        for func_name, func_def in dynamodb_functions.items():
+        for func_name, func_def in supabase_functions.items():
             tools.append(func_def)
         
         return tools
@@ -279,16 +285,6 @@ class RealClaudeAPIClient:
         • Operational excellence: disaster recovery, data archival, monitoring instrumentation
         • Security: multi-layer authentication, encryption at rest/transit, compliance frameworks
 
-        🎯 MONGODB INTELLIGENCE:
-        Collections require:
-        - Strategic indexing: compound indexes on query patterns, unique constraints on business keys, sparse indexes for optional fields
-        - Text search: full-text indexes with language-specific stemming
-        - Geospatial: 2dsphere indexes for location-based queries
-        - TTL indexes: automatic document expiration for temporary data
-        - Aggregation pipelines: complex joins via $lookup, data transformation, analytics pipelines
-        - Transactions: multi-document ACID operations for consistency
-        - Change streams: real-time event sourcing for microservices architectures
-
         🗄️ DYNAMODB MASTERY:
         Tables require:
         - Key design: HASH/RANGE patterns, GSI/LSI for query patterns, projection optimization
@@ -296,10 +292,18 @@ class RealClaudeAPIClient:
         - Transactional integrity: conditional writes, optimistic locking
         - Streams: CDC for event-driven architectures
         - Performance: provisioned vs on-demand, autoscaling, DAX caching
+        
+        🐘 POSTGRESQL/SUPABASE EXCELLENCE:
+        Tables require:
+        - Schema design: proper data types, constraints, relationships
+        - Indexing: B-tree, GIN, GiST indexes for query optimization
+        - ACID compliance: transactions, referential integrity
+        - Performance: query optimization, connection pooling
+        - Supabase features: Row Level Security, Real-time subscriptions, Storage
 
         ⚡ EXECUTION MANIFESTO:
-        MongoDB: Use create_collection_advanced with complex index definitions (compound, unique, sparse, text, geospatial, TTL).
         DynamoDB: Use create_table_advanced with complete schemas (KeySchema, AttributeDefinitions, GSI/LSI).
+        PostgreSQL/Supabase: Use create_table_postgres with SQL CREATE TABLE statements. Interpret pre-defined schemas and execute operations.
 
         Think architecturally. Build systems that handle millions of users, petabytes of data, sub-millisecond queries, 99.99% uptime.
         """
@@ -330,9 +334,28 @@ class RealClaudeAPIClient:
     
     def execute_function_call(self, function_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a function call and return the result"""
-        # Check if it's a MongoDB function
-        if function_name in MONGODB_FUNCTION_REGISTRY:
-            return call_mongodb_function(function_name, **parameters)
+        # Check if it's a Supabase function (map Claude names to driver names)
+        supabase_function_names = [
+            "create_table_postgres", "insert_row_postgres", "query_table_postgres", 
+            "update_row_postgres", "delete_row_postgres", "list_tables_postgres",
+            "get_table_info_postgres", "validate_supabase_credentials"
+        ]
+        if function_name in supabase_function_names:
+            # Map Claude function names to driver function names
+            function_mapping = {
+                "create_table_postgres": "create_table",
+                "insert_row_postgres": "insert_row",
+                "query_table_postgres": "query_table",
+                "update_row_postgres": "update_row",
+                "delete_row_postgres": "delete_row",
+                "list_tables_postgres": "list_tables",
+                "get_table_info_postgres": "get_table_info",
+                "validate_supabase_credentials": "validate_credentials"
+            }
+            driver_function = function_mapping.get(function_name, function_name)
+            return call_supabase_function(driver_function, **parameters)
+        
+        # DynamoDB function
         return call_function(function_name, **parameters)
     
     def process_claude_response(self, claude_response: Dict[str, Any]) -> Dict[str, Any]:

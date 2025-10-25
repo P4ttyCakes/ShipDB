@@ -18,14 +18,10 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
     AWS_REGION: str = "us-east-1"
     
-    # MongoDB Atlas
-    MONGODB_ATLAS_PUBLIC_KEY: Optional[str] = None
-    MONGODB_ATLAS_PRIVATE_KEY: Optional[str] = None
-    MONGODB_ATLAS_PROJECT_ID: Optional[str] = None
-    
-    # MongoDB Atlas Service Account (OAuth 2.0)
-    MONGODB_ATLAS_SERVICE_CLIENT_ID: Optional[str] = None
-    MONGODB_ATLAS_SERVICE_CLIENT_SECRET: Optional[str] = None
+    # Supabase
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_KEY: Optional[str] = None
+    SUPABASE_SERVICE_KEY: Optional[str] = None
     
     # Claude AI
     CLAUDE_API_KEY: Optional[str] = None
