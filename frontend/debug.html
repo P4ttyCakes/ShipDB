@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShipDB Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>ShipDB Debug Page</h1>
+    
+    <div class="test">
+        <h3>Test 1: Basic HTML</h3>
+        <p>If you can see this, the server is working.</p>
+    </div>
+    
+    <div class="test">
+        <h3>Test 2: JavaScript</h3>
+        <p id="js-test">JavaScript not working</p>
+        <script>
+            document.getElementById('js-test').textContent = 'JavaScript is working!';
+        </script>
+    </div>
+    
+    <div class="test">
+        <h3>Test 3: Main.js Loading</h3>
+        <p id="main-test">Main.js not loaded</p>
+        <script>
+            try {
+                // Test if our main.js loads
+                const script = document.createElement('script');
+                script.src = 'src/main.js';
+                script.onload = function() {
+                    document.getElementById('main-test').textContent = 'Main.js loaded successfully!';
+                };
+                script.onerror = function() {
+                    document.getElementById('main-test').textContent = 'Main.js failed to load!';
+                };
+                document.head.appendChild(script);
+            } catch (error) {
+                document.getElementById('main-test').textContent = 'Error loading main.js: ' + error.message;
+            }
+        </script>
+    </div>
+    
+    <div class="test">
+        <h3>Test 4: API Connection</h3>
+        <p id="api-test">Testing API...</p>
+        <script>
+            fetch('http://localhost:8000/health')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('api-test').textContent = 'API connected: ' + JSON.stringify(data);
+                })
+                .catch(error => {
+                    document.getElementById('api-test').textContent = 'API error: ' + error.message;
+                });
+        </script>
+    </div>
+</body>
+</html>

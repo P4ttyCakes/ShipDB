@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShipDB Browser Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test { background: #f0f0f0; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .success { background: #d4edda; border-left: 4px solid #28a745; }
+        .error { background: #f8d7da; border-left: 4px solid #dc3545; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🧪 ShipDB Browser Test</h1>
+    
+    <div class="test">
+        <h3>Test 1: Basic HTML & JavaScript</h3>
+        <p id="basic-test">Testing...</p>
+        <script>
+            document.getElementById('basic-test').textContent = '✅ Basic HTML and JavaScript working!';
+        </script>
+    </div>
+    
+    <div class="test">
+        <h3>Test 2: CSS Loading</h3>
+        <p id="css-test">Testing CSS...</p>
+        <script>
+            const testDiv = document.createElement('div');
+            testDiv.style.cssText = 'color: blue; font-weight: bold;';
+            testDiv.textContent = '✅ CSS is working!';
+            document.getElementById('css-test').appendChild(testDiv);
+        </script>
+    </div>
+    
+    <div class="test">
+        <h3>Test 3: API Connection</h3>
+        <p id="api-test">Testing API connection...</p>
+        <script>
+            fetch('http://localhost:8000/health')
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                })
+                .then(data => {
+                    const testDiv = document.getElementById('api-test');
+                    testDiv.className = 'test success';
+                    testDiv.innerHTML = '✅ API connection successful!<br><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                })
+                .catch(error => {
+                    const testDiv = document.getElementById('api-test');
+                    testDiv.className = 'test error';
+                    testDiv.innerHTML = '❌ API connection failed: ' + error.message;
+                });
+        </script>
+    </div>
+    
+    <div class="test">
+        <h3>Test 4: Main.js Loading</h3>
+        <p id="main-test">Testing main.js...</p>
+        <script>
+            const script = document.createElement('script');
+            script.src = 'src/main.js';
+            script.onload = function() {
+                const testDiv = document.getElementById('main-test');
+                testDiv.className = 'test success';
+                testDiv.innerHTML = '✅ main.js loaded successfully!';
+            };
+            script.onerror = function() {
+                const testDiv = document.getElementById('main-test');
+                testDiv.className = 'test error';
+                testDiv.innerHTML = '❌ main.js failed to load!';
+            };
+            document.head.appendChild(script);
+        </script>
+    </div>
+    
+    <div class="test">
+        <h3>Test 5: Project Creation API</h3>
+        <p id="project-test">Testing project creation...</p>
+        <script>
+            fetch('http://localhost:8000/api/projects/new_project/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: 'Test Project',
+                    description: 'A test project'
+                })
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                }
+                throw new Error(`HTTP ${response.status}`);
+            })
+            .then(data => {
+                const testDiv = document.getElementById('project-test');
+                testDiv.className = 'test success';
+                testDiv.innerHTML = '✅ Project creation API working!<br><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            })
+            .catch(error => {
+                const testDiv = document.getElementById('project-test');
+                testDiv.className = 'test error';
+                testDiv.innerHTML = '❌ Project creation failed: ' + error.message;
+            });
+        </script>
+    </div>
+    
+    <div class="test">
+        <h3>Test 6: App Container</h3>
+        <p id="container-test">Testing app container...</p>
+        <div id="app" style="display: none;"><!-- Test app container --></div>
+        <script>
+            const appContainer = document.getElementById('app');
+            if (appContainer) {
+                const testDiv = document.getElementById('container-test');
+                testDiv.className = 'test success';
+                testDiv.innerHTML = '✅ App container found!<br>Container exists and is accessible.';
+            } else {
+                const testDiv = document.getElementById('container-test');
+                testDiv.className = 'test error';
+                testDiv.innerHTML = '❌ App container not found!';
+            }
+        </script>
+    </div>
+    
+    <div class="test">
+        <h3>Instructions</h3>
+        <p>If all tests pass, try these URLs:</p>
+        <ul>
+            <li><a href="/">Main App (index.html)</a></li>
+            <li><a href="/simple.html">Simple Version</a></li>
+            <li><a href="/debug.html">Debug Version</a></li>
+        </ul>
+        <p>If the main app is blank, check the browser console (F12) for JavaScript errors.</p>
+    </div>
+</body>
+</html>

@@ -55,7 +55,7 @@ ShipDB/
 
 - Python 3.10+
 - AWS Account with credentials configured
-- OpenAI API key
+- OpenAI API key (or Anthropic/Gemini API key)
 
 ### Installation
 
@@ -64,6 +64,24 @@ ShipDB/
 git clone https://github.com/P4ttyCakes/ShipDB.git
 cd ShipDB
 
+# Create environment file
+# See CONFIGURATION.md for detailed setup instructions
+# You'll need to create a .env file with your API keys
+
+# Verify setup (optional)
+./verify_setup.sh
+
+# Start the application
+./start_backend.sh    # In one terminal
+./start_frontend.sh   # In another terminal
+
+# Test the API (optional, after starting backend)
+python3 test_api.py
+```
+
+### Manual Setup (Alternative)
+
+```bash
 # Backend setup
 cd backend
 python -m venv venv
@@ -98,14 +116,25 @@ python -m http.server 8001
 
 ## 🔧 Configuration
 
-Set these environment variables:
+See [CONFIGURATION.md](CONFIGURATION.md) for detailed setup instructions including:
+- API key setup for OpenAI, Anthropic, and Gemini
+- AWS credentials configuration
+- Environment variable reference
 
-```env
-OPENAI_API_KEY=your_key_here
-AWS_ACCESS_KEY_ID=your_key
-AWS_SECRET_ACCESS_KEY=your_secret
-AWS_REGION=us-east-1
-```
+## 🔧 Troubleshooting
+
+### Common Issues
+
+1. **Backend won't start**: Make sure you have Python 3.10+ and all dependencies installed
+2. **Import errors**: Run `./verify_setup.sh` to check your setup
+3. **API errors**: Ensure your `.env` file has the correct API keys
+4. **Frontend not loading**: Make sure you're running the frontend server on port 8001
+
+### Getting Help
+
+- Check the API documentation at `http://localhost:8000/docs` when the backend is running
+- Run `./verify_setup.sh` to diagnose setup issues
+- Run `python3 test_api.py` to test API endpoints
 
 ## 🤝 Contributing
 

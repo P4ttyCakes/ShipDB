@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShipDB - Working Version</title>
+    <link rel="stylesheet" href="src/styles/main.css">
+</head>
+<body>
+    <div id="app">
+        <!-- App will be rendered here -->
+    </div>
+    
+    <script>
+        // Simple working version
+        function createApp() {
+            const app = document.createElement('div');
+            app.className = 'app-container';
+            
+            app.innerHTML = `
+                <header class="app-header">
+                    <h1>🚢 ShipDB</h1>
+                    <p class="subtitle">Instant Cloud Database Deployment</p>
+                </header>
+                
+                <main id="main-content" class="main-content">
+                    <div class="welcome-section">
+                        <h2>Welcome to ShipDB</h2>
+                        <p>Deploy MongoDB, PostgreSQL, or DynamoDB in minutes with AI-powered schema generation.</p>
+                        <button id="start-btn" class="btn btn-primary">Start New Project</button>
+                    </div>
+                </main>
+                
+                <footer class="app-footer">
+                    <p>Built with FastAPI & Lovable</p>
+                </footer>
+            `;
+            
+            // Add event listener for start button
+            const startBtn = app.querySelector('#start-btn');
+            startBtn.addEventListener('click', () => {
+                // Test API connection
+                fetch('http://localhost:8000/health')
+                    .then(response => response.json())
+                    .then(data => {
+                        alert('✅ Backend is working!\n\nResponse: ' + JSON.stringify(data) + '\n\nYou can now use the full application!');
+                    })
+                    .catch(error => {
+                        alert('❌ Backend connection failed: ' + error.message + '\n\nMake sure the backend is running on port 8000.');
+                    });
+            });
+            
+            return app;
+        }
+        
+        // Initialize the app
+        try {
+            const appContainer = document.getElementById('app');
+            if (appContainer) {
+                appContainer.appendChild(createApp());
+                console.log('App initialized successfully');
+            } else {
+                console.error('App container not found');
+            }
+        } catch (error) {
+            console.error('Error initializing app:', error);
+        }
+    </script>
+</body>
+</html>

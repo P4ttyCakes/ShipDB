@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShipDB Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>ShipDB Test Page</h1>
+    
+    <div class="test">
+        <h3>Test 1: Basic HTML</h3>
+        <p>If you can see this, the server is working.</p>
+    </div>
+    
+    <div class="test">
+        <h3>Test 2: JavaScript</h3>
+        <p id="js-test">JavaScript not working</p>
+        <script>
+            document.getElementById('js-test').textContent = 'JavaScript is working!';
+        </script>
+    </div>
+    
+    <div class="test">
+        <h3>Test 3: ES6 Modules</h3>
+        <p id="module-test">ES6 modules not working</p>
+        <script type="module">
+            document.getElementById('module-test').textContent = 'ES6 modules are working!';
+        </script>
+    </div>
+    
+    <div class="test">
+        <h3>Test 4: Import App.js</h3>
+        <p id="import-test">Import not working</p>
+        <script type="module">
+            try {
+                const { App } = await import('./src/App.js');
+                document.getElementById('import-test').textContent = 'App.js import is working!';
+            } catch (error) {
+                document.getElementById('import-test').textContent = 'App.js import failed: ' + error.message;
+            }
+        </script>
+    </div>
+    
+    <div class="test">
+        <h3>Test 5: Full App</h3>
+        <div id="app-test"></div>
+        <script type="module">
+            try {
+                const { App } = await import('./src/App.js');
+                const appContainer = document.getElementById('app-test');
+                appContainer.appendChild(App());
+            } catch (error) {
+                document.getElementById('app-test').innerHTML = '<p style="color: red;">App failed to load: ' + error.message + '</p>';
+            }
+        </script>
+    </div>
+</body>
+</html>

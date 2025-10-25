@@ -4,13 +4,282 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ShipDB - Instant Cloud Database Deployment</title>
-    <link rel="stylesheet" href="/src/styles/main.css">
+    <link rel="stylesheet" href="src/styles/main.css">
 </head>
 <body>
     <div id="app">
         <!-- App will be rendered here -->
     </div>
     
-    <script type="module" src="/src/main.js"></script>
+    <script>
+        // Simple working version for the main app
+        function createApp() {
+            const app = document.createElement('div');
+            app.className = 'app-container';
+            
+            app.innerHTML = `
+                <header class="app-header">
+                    <h1>🚢 ShipDB</h1>
+                    <p class="subtitle">Instant Cloud Database Deployment</p>
+                </header>
+                
+                <main id="main-content" class="main-content">
+                    <div class="welcome-section">
+                        <h2>Welcome to ShipDB</h2>
+                        <p>Create and deploy databases without any technical knowledge! Our AI will design the perfect database structure based on your business needs.</p>
+                        <div class="features">
+                            <div class="feature">🤖 AI-powered design suggestions</div>
+                            <div class="feature">📊 No technical knowledge required</div>
+                            <div class="feature">⚡ Deploy in minutes</div>
+                        </div>
+                        <button id="start-btn" class="btn btn-primary">Start New Project</button>
+                    </div>
+                </main>
+                
+                <footer class="app-footer">
+                    <p>Built with FastAPI & Lovable</p>
+                </footer>
+            `;
+            
+            // Add event listener for start button
+            const startBtn = app.querySelector('#start-btn');
+            startBtn.addEventListener('click', () => {
+                // Test API connection first
+                fetch('http://localhost:8000/health')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'healthy') {
+                            // Backend is working, show project form
+                            showProjectForm();
+                        } else {
+                            alert('Backend is not healthy. Please check the server.');
+                        }
+                    })
+                    .catch(error => {
+                        alert('❌ Cannot connect to backend: ' + error.message + '\n\nMake sure the backend is running on port 8000.');
+                    });
+            });
+            
+            return app;
+        }
+        
+        function showProjectForm() {
+            const mainContent = document.getElementById('main-content');
+            mainContent.innerHTML = `
+                <div class="project-form">
+                    <h2>Create New Project</h2>
+                    <form id="project-form-element">
+                        <div class="form-group">
+                            <label for="project-name">Project Name:</label>
+                            <input type="text" id="project-name" name="name" required placeholder="My Awesome Project">
+                        </div>
+                        <div class="form-group">
+                            <label for="project-description">Description:</label>
+                            <textarea id="project-description" name="description" placeholder="Describe your project..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Start AI Conversation</button>
+                    </form>
+                </div>
+            `;
+            
+            // Add form submission handler
+            const form = document.getElementById('project-form-element');
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                startProject();
+            });
+        }
+        
+        async function startProject() {
+            const name = document.getElementById('project-name').value;
+            const description = document.getElementById('project-description').value;
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/projects/new_project/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name, description })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                showConversation(result.prompt, result.session_id);
+            } catch (error) {
+                alert(`Error starting project: ${error.message}`);
+            }
+        }
+        
+        function showConversation(initialPrompt, sessionId) {
+            const mainContent = document.getElementById('main-content');
+            mainContent.innerHTML = `
+                <div class="conversation-section">
+                    <h2>AI Conversation</h2>
+                    <div id="conversation-log" class="conversation-log">
+                        <div class="ai-message">🤖 ${initialPrompt}</div>
+                    </div>
+                    <div class="conversation-input">
+                        <input type="text" id="user-input" placeholder="Type your answer here...">
+                        <button id="send-answer" class="btn btn-primary">Send</button>
+                    </div>
+                    <button id="finish-conversation" class="btn btn-secondary" style="display: none;">Finish & Generate Schema</button>
+                </div>
+            `;
+            
+            // Add event listeners
+            const sendBtn = document.getElementById('send-answer');
+            const userInput = document.getElementById('user-input');
+            const finishBtn = document.getElementById('finish-conversation');
+            
+            sendBtn.addEventListener('click', () => sendAnswer(sessionId));
+            userInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendAnswer(sessionId);
+                }
+            });
+            finishBtn.addEventListener('click', () => finishConversation(sessionId));
+            
+            userInput.focus();
+        }
+        
+        async function sendAnswer(sessionId) {
+            const input = document.getElementById('user-input');
+            const answer = input.value.trim();
+            
+            if (!answer) return;
+            
+            // Add user message to log
+            const log = document.getElementById('conversation-log');
+            log.innerHTML += `<div class="user-message">👤 ${answer}</div>`;
+            input.value = '';
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/projects/new_project/next', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        answer: answer
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Add AI response to log
+                log.innerHTML += `<div class="ai-message">🤖 ${result.prompt}</div>`;
+                
+                if (result.done) {
+                    document.getElementById('finish-conversation').style.display = 'block';
+                    document.getElementById('user-input').disabled = true;
+                    document.getElementById('send-answer').disabled = true;
+                }
+                
+                // Scroll to bottom
+                log.scrollTop = log.scrollHeight;
+            } catch (error) {
+                alert(`Error sending answer: ${error.message}`);
+            }
+        }
+        
+        async function finishConversation(sessionId) {
+            try {
+                const response = await fetch('http://localhost:8000/api/projects/new_project/finish', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Generate schema
+                await generateSchema(result.spec);
+            } catch (error) {
+                alert(`Error finishing conversation: ${error.message}`);
+            }
+        }
+        
+        async function generateSchema(spec) {
+            try {
+                const response = await fetch('http://localhost:8000/api/schema/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(spec)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const artifacts = await response.json();
+                showResults(artifacts);
+            } catch (error) {
+                alert(`Error generating schema: ${error.message}`);
+            }
+        }
+        
+        function showResults(artifacts) {
+            const mainContent = document.getElementById('main-content');
+            mainContent.innerHTML = `
+                <div class="results-section">
+                    <h2>Generated Schema</h2>
+                    <div class="schema-section">
+                        <h3>📝 PostgreSQL SQL</h3>
+                        <pre><code>${artifacts.postgres_sql || 'No SQL generated'}</code></pre>
+                    </div>
+                    
+                    <div class="schema-section">
+                        <h3>📋 JSON Schema</h3>
+                        <pre><code>${JSON.stringify(artifacts.json_schema, null, 2)}</code></pre>
+                    </div>
+                    
+                    <div class="schema-section">
+                        <h3>🍃 MongoDB Scripts</h3>
+                        <pre><code>${artifacts.mongo_scripts ? artifacts.mongo_scripts.join('\n') : 'No MongoDB scripts'}</code></pre>
+                    </div>
+                    
+                    <div class="schema-section">
+                        <h3>⚡ DynamoDB Tables</h3>
+                        <pre><code>${JSON.stringify(artifacts.dynamodb_tables, null, 2)}</code></pre>
+                    </div>
+                    
+                    <div class="actions">
+                        <button onclick="location.reload()" class="btn btn-primary">Start New Project</button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Initialize the app
+        try {
+            const appContainer = document.getElementById('app');
+            if (appContainer) {
+                appContainer.appendChild(createApp());
+            } else {
+                console.error('App container not found');
+            }
+        } catch (error) {
+            console.error('Error initializing app:', error);
+        }
+    </script>
 </body>
 </html>

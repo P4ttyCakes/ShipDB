@@ -24,7 +24,8 @@ export function App() {
     // Add event listener for start button
     const startBtn = app.querySelector('#start-btn');
     startBtn.addEventListener('click', () => {
-        window.location.href = '/src/components/project-form.html';
+        // For now, just show an alert - this will be replaced with proper routing
+        alert('Project creation feature coming soon! Make sure to configure your API keys in the backend .env file.');
     });
     
     return app;

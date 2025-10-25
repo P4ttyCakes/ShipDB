@@ -5,6 +5,8 @@ python-multipart==0.0.6
 
 # AI Agent
 openai==1.3.0
+google-generativeai==0.7.2
+anthropic==0.39.0
 
 # Database Drivers
 pymongo==4.6.0
