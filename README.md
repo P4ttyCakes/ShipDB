@@ -1,120 +1,146 @@
-# 🚢 ShipDB - Instant Cloud Database Deployment
+# 🚀 ShipDB - Instant Cloud Database Deployment
 
-**ShipDB** allows developers to rapidly generate and deploy cloud databases (MongoDB, PostgreSQL, DynamoDB) without manually defining schemas or managing infrastructure.
+**ShipDB** is a hackathon MVP that rapidly generates and deploys cloud databases (MongoDB, PostgreSQL, DynamoDB) without manual schema definition or infrastructure management.
 
-## 🎯 Target Audience
-
-1. **Developers / Startups**: Spin up production-ready databases for new projects instantly
-2. **Rapid Prototyping**: Get a database running in minutes, not hours
-
-## ✨ Features
-
-- **AI-Powered Schema Generation**: Interactive conversation with GPT-5 to understand your requirements
-- **Multi-Database Support**: MongoDB, PostgreSQL, and DynamoDB
-- **Cloud Deployment**: Automatic AWS deployment (EC2, RDS, DynamoDB)
-- **Schema Visualization**: ERD diagrams for visual schema review
-- **Export Options**: Download SQL scripts, JSON schemas, and connection info
-
-## 🛠 Tech Stack
-
-### Backend
-- **FastAPI** (Python) - High-performance async API
-- **GPT-5 via OpenAI** - AI agent for requirements gathering
-- **Boto3** - AWS infrastructure management
-- **PyMongo, SQLAlchemy, psycopg2** - Database drivers
-
-### Frontend
-- **HTML/CSS/JavaScript** (Lovable-friendly)
-- **Vanilla JS** - No framework dependencies
-
-## 📁 Project Structure
+## 🏗️ **Project Structure**
 
 ```
 ShipDB/
-├── backend/              # FastAPI application
+├── backend/                    # FastAPI backend
 │   ├── app/
-│   │   ├── api/routes/   # API endpoints
-│   │   ├── services/     # Business logic
-│   │   ├── models/       # Pydantic models
-│   │   └── utils/        # Helper functions
-│   └── tests/            # Test suite
-│
-├── frontend/             # Lovable HTML/CSS/JS
-│   ├── src/
-│   │   ├── components/   # UI components
-│   │   ├── api/          # API client
-│   │   └── styles/       # CSS
-│   └── index.html
-│
-└── docs/                 # Documentation
+│   │   ├── api/               # API routes
+│   │   ├── core/              # Configuration
+│   │   ├── models/            # Data models
+│   │   ├── services/          # Deployment services
+│   │   └── utils/             # Utilities
+│   ├── requirements.txt       # Python dependencies
+│   └── .env                   # Environment variables
+├── frontend/                  # Frontend application
+│   └── src/
+├── scripts/                   # Demo and test scripts
+│   ├── demos/                 # Database demos
+│   ├── tests/                 # Test scripts
+│   └── run_demos.py          # Demo runner
+├── docs/                      # Documentation
+└── examples/                  # Usage examples
 ```
 
-## 🚀 Quick Start
+## 🚀 **Quick Start**
 
-### Prerequisites
-
-- Python 3.10+
-- AWS Account with credentials configured
-- OpenAI API key
-
-### Installation
-
+### **1. Setup Environment**
 ```bash
-# Clone the repository
-git clone https://github.com/P4ttyCakes/ShipDB.git
-cd ShipDB
-
-# Backend setup
 cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your API keys
-
-# Start backend
-uvicorn app.main:app --reload
 ```
 
-### Frontend
-
-Open `frontend/index.html` in your browser or use a local server:
-
-```bash
-cd frontend
-python -m http.server 8001
-# Open http://localhost:8001
-```
-
-## 📖 Usage
-
-1. **Start a Project**: Click "New Project" on the frontend
-2. **Answer Questions**: Chat with the AI about your database needs
-3. **Review Schema**: View generated schema and ERD diagram
-4. **Deploy**: Click deploy to create your AWS database
-5. **Connect**: Copy connection info and start coding!
-
-## 🔧 Configuration
-
-Set these environment variables:
-
+### **2. Configure AWS Credentials**
+Create `.env` file in `backend/`:
 ```env
-OPENAI_API_KEY=your_key_here
-AWS_ACCESS_KEY_ID=your_key
-AWS_SECRET_ACCESS_KEY=your_secret
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
 AWS_REGION=us-east-1
+OPENAI_API_KEY=your_openai_key
 ```
 
-## 🤝 Contributing
+### **3. Run Demos**
+```bash
+# From project root
+python scripts/run_demos.py
+```
 
-This is a hackathon MVP. Pull requests welcome!
+### **4. Start API Server**
+```bash
+cd backend
+source .venv/bin/activate
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
 
-## 📄 License
+## 📊 **Available Demos**
 
-MIT
+### **Database Generators**
+- **E-commerce Database** - Complete online store (12 tables)
+- **Social Media Platform** - Full social network (12 tables)
+- **AWS Infrastructure Demo** - Show system capabilities
 
-## 🙏 Acknowledgments
+### **Sample Data**
+- **E-commerce Sample Data** - Add realistic test data
+- **Project Connection Test** - Verify project organization
 
-Built with love for rapid prototyping and developer productivity.
+## 🎯 **Current Projects**
+
+### **🛒 E-commerce Store**
+- **Project ID**: `ecommerce_20241025_020803`
+- **Database**: `ecommerce_store`
+- **Tables**: 12 (users, products, orders, etc.)
+- **Status**: ✅ Active with sample data
+
+### **📱 Social Media Platform**
+- **Project ID**: `social_media_20251025_023915`
+- **Database**: `social_platform`
+- **Tables**: 12 (users, posts, comments, etc.)
+- **Status**: ✅ Active and ready
+
+## 🔧 **API Endpoints**
+
+### **Deploy Database**
+```bash
+POST /api/deploy/
+{
+  "project_id": "my_project",
+  "database_type": "dynamodb",
+  "database_name": "my_db",
+  "schema_data": {
+    "tables": [
+      {"name": "users", "primary_key": "user_id"},
+      {"name": "posts", "primary_key": "post_id"}
+    ]
+  }
+}
+```
+
+### **Health Check**
+```bash
+GET /health
+```
+
+## 📚 **Documentation**
+
+- [AWS Infrastructure Complete](docs/AWS_INFRASTRUCTURE_COMPLETE.md)
+- [E-commerce Database Guide](docs/ECOMMERCE_DATABASE_COMPLETE.md)
+- [Two Projects Overview](docs/TWO_PROJECTS_COMPLETE.md)
+- [How to See It in Action](docs/HOW_TO_SEE_IT_IN_ACTION.md)
+
+## 🛠️ **Tech Stack**
+
+- **Backend**: FastAPI (Python)
+- **Database**: AWS DynamoDB, MongoDB Atlas, PostgreSQL RDS
+- **AI**: OpenAI GPT-4 for schema generation
+- **Cloud**: AWS (boto3)
+- **Frontend**: Vanilla JavaScript
+
+## 🎯 **Features**
+
+- ✅ **Instant Database Deployment** - Deploy in seconds
+- ✅ **AI-Powered Schema Generation** - No manual schema design
+- ✅ **Multiple Database Types** - DynamoDB, MongoDB, PostgreSQL
+- ✅ **Real AWS Resources** - Production-ready infrastructure
+- ✅ **Project Management** - Organized by project IDs
+- ✅ **Sample Data** - Ready-to-use test data
+- ✅ **REST API** - Easy integration
+
+## 🚀 **Next Steps**
+
+1. **Build Frontend** - Create user interface
+2. **Add AI Agent** - Implement schema generation
+3. **Enhance Services** - Complete MongoDB/PostgreSQL
+4. **Add Features** - Search, analytics, monitoring
+
+## 📞 **Support**
+
+This is a hackathon MVP. For questions or issues, check the documentation in the `docs/` directory.
+
+---
+
+**Built with ❤️ for rapid database deployment** 🚀
