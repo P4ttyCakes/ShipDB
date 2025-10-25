@@ -29,25 +29,46 @@ class AIAgentService:
     def _system_instruction(self) -> str:
         """Return the instruction used to constrain the model to a JSON control response."""
         return (
-            "You are an expert database architect helping non-technical users create database schemas. "
-            "Your goal is to suggest appropriate database designs based on their project description, NOT ask technical questions. "
-            "You should intelligently infer database requirements from business needs and suggest complete schemas. "
+            "You are a senior database architect and domain expert with deep business intelligence. "
+            "When given ANY request to build a database system, you must: "
             "\n\n"
-            "Process: "
-            "1. Analyze the project description to understand the business domain "
-            "2. Suggest appropriate database type (postgresql for relational data, mongodb for flexible documents, dynamodb for high-scale) "
-            "3. Propose entities/tables based on the business domain "
-            "4. Suggest fields with appropriate data types "
-            "5. Add sensible constraints, indexes, and relationships automatically "
+            "🔍 DEEP DOMAIN ANALYSIS PROCESS: "
+            "1. ANALYZE THE BUSINESS MODEL: Understand the core business, revenue streams, user types, and value propositions "
+            "2. IDENTIFY STAKEHOLDERS: Who are the users, admins, partners, regulators, and third-party integrations? "
+            "3. MAP USER JOURNEYS: Trace complete user workflows from onboarding to core operations to offboarding "
+            "4. IDENTIFY BUSINESS PROCESSES: What are the key operations, transactions, and business rules? "
+            "5. CONSIDER REGULATORY REQUIREMENTS: What compliance, audit, and legal requirements exist? "
+            "6. ANALYZE DATA RELATIONSHIPS: How do entities connect? What are the cardinalities and dependencies? "
+            "7. IDENTIFY PERFORMANCE PATTERNS: What are the common queries, search patterns, and analytics needs? "
             "\n\n"
-            "IMPORTANT: After gathering sufficient business information, you MUST generate a complete database specification. "
-            "Don't keep asking questions indefinitely - provide a working database design based on the information gathered."
+            "🏗️ COMPREHENSIVE SCHEMA DESIGN: "
+            "- Design for REAL BUSINESS OPERATIONS, not just basic CRUD "
+            "- Include ALL necessary tables for a production system "
+            "- Consider edge cases, error handling, and data integrity "
+            "- Design for scalability, performance, and maintainability "
+            "- Include proper indexes for common query patterns "
+            "- Consider data archival, backup, and recovery needs "
+            "\n\n"
+            "🎯 DOMAIN-SPECIFIC INTELLIGENCE: "
+            "For ANY domain, think deeply about: "
+            "- User management (roles, permissions, authentication, profiles) "
+            "- Core business entities and their lifecycle "
+            "- Transaction processing and financial flows "
+            "- Communication and notification systems "
+            "- Analytics, reporting, and business intelligence "
+            "- Audit trails and compliance tracking "
+            "- Integration points with external systems "
+            "- Performance optimization and caching needs "
+            "- Security, privacy, and data protection "
+            "- Error handling and system monitoring "
             "\n\n"
             "Ask ONLY high-level business questions like: "
             "- 'What type of users will use this system?' "
             "- 'What are the main features you want?' "
             "- 'Do you need to track user accounts, orders, inventory, etc.?' "
             "- 'What are the key data points you need to store?' "
+            "- 'What are your main business processes and workflows?' "
+            "- 'Do you need integration with external systems or APIs?' "
             "\n\n"
             "NEVER ask technical questions about: "
             "- Database constraints, indexes, foreign keys "
@@ -143,16 +164,86 @@ class AIAgentService:
         return msgs
     
     def _generate_basic_entities_from_context(self, history: List[Dict], answer: str) -> List[Dict]:
-        """Generate basic entities based on conversation context when user wants to proceed"""
+        """Generate comprehensive entities based on conversation context when user wants to proceed"""
         entities = []
         
         # Extract business context from conversation
         full_conversation = " ".join([msg.get("content", "") for msg in history + [{"content": answer}]])
         full_conversation_lower = full_conversation.lower()
         
-        # Real Estate Platform entities
-        if any(word in full_conversation_lower for word in ["property", "real estate", "rent", "buy", "apartment", "house", "condo"]):
+        # Stock/Investment Platform entities
+        if any(word in full_conversation_lower for word in ["stock", "investment", "portfolio", "trading", "investor", "shares", "market"]):
             entities.extend([
+                {
+                    "name": "users",
+                    "fields": [
+                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
+                        {"name": "email", "type": "string", "required": True, "unique": True},
+                        {"name": "name", "type": "string", "required": True},
+                        {"name": "role", "type": "string", "required": True},
+                        {"name": "account_balance", "type": "decimal", "required": False},
+                        {"name": "risk_tolerance", "type": "string", "required": False},
+                        {"name": "created_at", "type": "timestamp", "required": True},
+                        {"name": "updated_at", "type": "timestamp", "required": True}
+                    ]
+                },
+                {
+                    "name": "stocks",
+                    "fields": [
+                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
+                        {"name": "symbol", "type": "string", "required": True, "unique": True},
+                        {"name": "company_name", "type": "string", "required": True},
+                        {"name": "current_price", "type": "decimal", "required": True},
+                        {"name": "price_change", "type": "decimal", "required": False},
+                        {"name": "volume", "type": "integer", "required": False},
+                        {"name": "market_cap", "type": "decimal", "required": False},
+                        {"name": "last_updated", "type": "timestamp", "required": True}
+                    ]
+                },
+                {
+                    "name": "portfolios",
+                    "fields": [
+                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
+                        {"name": "user_id", "type": "uuid", "required": True},
+                        {"name": "stock_id", "type": "uuid", "required": True},
+                        {"name": "quantity", "type": "integer", "required": True},
+                        {"name": "purchase_price", "type": "decimal", "required": True},
+                        {"name": "purchase_date", "type": "timestamp", "required": True},
+                        {"name": "current_value", "type": "decimal", "required": False}
+                    ]
+                },
+                {
+                    "name": "transactions",
+                    "fields": [
+                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
+                        {"name": "user_id", "type": "uuid", "required": True},
+                        {"name": "stock_id", "type": "uuid", "required": True},
+                        {"name": "transaction_type", "type": "string", "required": True},
+                        {"name": "quantity", "type": "integer", "required": True},
+                        {"name": "price_per_share", "type": "decimal", "required": True},
+                        {"name": "total_amount", "type": "decimal", "required": True},
+                        {"name": "transaction_date", "type": "timestamp", "required": True},
+                        {"name": "status", "type": "string", "required": True}
+                    ]
+                }
+            ])
+        
+        # Real Estate Platform entities
+        elif any(word in full_conversation_lower for word in ["property", "real estate", "rent", "buy", "apartment", "house", "condo"]):
+            entities.extend([
+                {
+                    "name": "users",
+                    "fields": [
+                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
+                        {"name": "email", "type": "string", "required": True, "unique": True},
+                        {"name": "name", "type": "string", "required": True},
+                        {"name": "role", "type": "string", "required": True},
+                        {"name": "phone", "type": "string", "required": False},
+                        {"name": "preferred_location", "type": "string", "required": False},
+                        {"name": "budget_range", "type": "string", "required": False},
+                        {"name": "created_at", "type": "timestamp", "required": True}
+                    ]
+                },
                 {
                     "name": "properties",
                     "fields": [
@@ -164,27 +255,51 @@ class AIAgentService:
                         {"name": "bathrooms", "type": "integer", "required": True},
                         {"name": "square_footage", "type": "integer", "required": False},
                         {"name": "price", "type": "decimal", "required": True},
-                        {"name": "location", "type": "string", "required": True},
-                        {"name": "owner_contact", "type": "string", "required": True},
+                        {"name": "address", "type": "string", "required": True},
+                        {"name": "city", "type": "string", "required": True},
+                        {"name": "state", "type": "string", "required": True},
+                        {"name": "zip_code", "type": "string", "required": True},
+                        {"name": "owner_id", "type": "uuid", "required": True},
+                        {"name": "status", "type": "string", "required": True},
                         {"name": "created_at", "type": "timestamp", "required": True},
                         {"name": "updated_at", "type": "timestamp", "required": True}
                     ]
                 },
+                {
+                    "name": "favorites",
+                    "fields": [
+                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
+                        {"name": "user_id", "type": "uuid", "required": True},
+                        {"name": "property_id", "type": "uuid", "required": True},
+                        {"name": "created_at", "type": "timestamp", "required": True}
+                    ]
+                },
+                {
+                    "name": "property_views",
+                    "fields": [
+                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
+                        {"name": "user_id", "type": "uuid", "required": True},
+                        {"name": "property_id", "type": "uuid", "required": True},
+                        {"name": "view_date", "type": "timestamp", "required": True},
+                        {"name": "duration_seconds", "type": "integer", "required": False}
+                    ]
+                }
+            ])
+        
+        # E-commerce entities
+        elif any(word in full_conversation_lower for word in ["product", "ecommerce", "store", "inventory", "order", "shopping"]):
+            entities.extend([
                 {
                     "name": "users",
                     "fields": [
                         {"name": "id", "type": "uuid", "required": True, "primary_key": True},
                         {"name": "email", "type": "string", "required": True, "unique": True},
                         {"name": "name", "type": "string", "required": True},
-                        {"name": "role", "type": "string", "required": True},
+                        {"name": "phone", "type": "string", "required": False},
+                        {"name": "address", "type": "text", "required": False},
                         {"name": "created_at", "type": "timestamp", "required": True}
                     ]
-                }
-            ])
-        
-        # E-commerce entities
-        elif any(word in full_conversation_lower for word in ["product", "ecommerce", "store", "inventory", "order"]):
-            entities.extend([
+                },
                 {
                     "name": "products",
                     "fields": [
@@ -194,21 +309,41 @@ class AIAgentService:
                         {"name": "price", "type": "decimal", "required": True},
                         {"name": "inventory_count", "type": "integer", "required": True},
                         {"name": "category", "type": "string", "required": True},
-                        {"name": "created_at", "type": "timestamp", "required": True}
+                        {"name": "sku", "type": "string", "required": True, "unique": True},
+                        {"name": "weight", "type": "decimal", "required": False},
+                        {"name": "dimensions", "type": "string", "required": False},
+                        {"name": "created_at", "type": "timestamp", "required": True},
+                        {"name": "updated_at", "type": "timestamp", "required": True}
                     ]
                 },
                 {
-                    "name": "users",
+                    "name": "orders",
                     "fields": [
                         {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "email", "type": "string", "required": True, "unique": True},
-                        {"name": "name", "type": "string", "required": True},
-                        {"name": "created_at", "type": "timestamp", "required": True}
+                        {"name": "user_id", "type": "uuid", "required": True},
+                        {"name": "order_number", "type": "string", "required": True, "unique": True},
+                        {"name": "total_amount", "type": "decimal", "required": True},
+                        {"name": "status", "type": "string", "required": True},
+                        {"name": "shipping_address", "type": "text", "required": True},
+                        {"name": "payment_method", "type": "string", "required": True},
+                        {"name": "order_date", "type": "timestamp", "required": True},
+                        {"name": "shipped_date", "type": "timestamp", "required": False}
+                    ]
+                },
+                {
+                    "name": "order_items",
+                    "fields": [
+                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
+                        {"name": "order_id", "type": "uuid", "required": True},
+                        {"name": "product_id", "type": "uuid", "required": True},
+                        {"name": "quantity", "type": "integer", "required": True},
+                        {"name": "unit_price", "type": "decimal", "required": True},
+                        {"name": "total_price", "type": "decimal", "required": True}
                     ]
                 }
             ])
         
-        # Default generic entities if no specific business detected
+        # Default comprehensive entities if no specific business detected
         else:
             entities.extend([
                 {
@@ -217,7 +352,10 @@ class AIAgentService:
                         {"name": "id", "type": "uuid", "required": True, "primary_key": True},
                         {"name": "email", "type": "string", "required": True, "unique": True},
                         {"name": "name", "type": "string", "required": True},
-                        {"name": "created_at", "type": "timestamp", "required": True}
+                        {"name": "role", "type": "string", "required": True},
+                        {"name": "status", "type": "string", "required": True},
+                        {"name": "created_at", "type": "timestamp", "required": True},
+                        {"name": "updated_at", "type": "timestamp", "required": True}
                     ]
                 },
                 {
@@ -226,6 +364,20 @@ class AIAgentService:
                         {"name": "id", "type": "uuid", "required": True, "primary_key": True},
                         {"name": "name", "type": "string", "required": True},
                         {"name": "description", "type": "text", "required": False},
+                        {"name": "category", "type": "string", "required": False},
+                        {"name": "status", "type": "string", "required": True},
+                        {"name": "created_at", "type": "timestamp", "required": True},
+                        {"name": "updated_at", "type": "timestamp", "required": True}
+                    ]
+                },
+                {
+                    "name": "user_activities",
+                    "fields": [
+                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
+                        {"name": "user_id", "type": "uuid", "required": True},
+                        {"name": "activity_type", "type": "string", "required": True},
+                        {"name": "description", "type": "text", "required": False},
+                        {"name": "metadata", "type": "text", "required": False},
                         {"name": "created_at", "type": "timestamp", "required": True}
                     ]
                 }
