@@ -110,6 +110,17 @@ class AIAgentService:
             "Example response format: "
             '{"next_question": "What type of users will use this system?", "done": false, "partial_spec": {}}'
             "\n\n"
+            "Example COMPLETE response when done=true: "
+            '{"next_question": "Perfect! I have enough information to create your database design.", "done": true, "partial_spec": {"app_type": "Healthcare Management System", "db_type": "postgresql", "entities": [{"name": "patients", "fields": [{"name": "id", "type": "uuid", "required": true}, {"name": "name", "type": "string", "required": true}, {"name": "email", "type": "string", "required": true}]}, {"name": "doctors", "fields": [{"name": "id", "type": "uuid", "required": true}, {"name": "name", "type": "string", "required": true}, {"name": "specialty", "type": "string", "required": true}]}]}}'
+            "\n\n"
+            "JSON VALIDATION RULES: "
+            "- Start response with { and end with } "
+            "- Use double quotes for all strings "
+            "- Use true/false for booleans (not True/False) "
+            "- Ensure all brackets and braces are properly closed "
+            "- No trailing commas "
+            "- Escape any quotes inside strings "
+            "\n\n"
             "When done=true, partial_spec must be a COMPLETE database specification with: "
             "- app_type: string describing the application "
             "- db_type: 'postgresql', 'mongodb', or 'dynamodb' "
@@ -207,7 +218,7 @@ class AIAgentService:
                     model=self._model_name,
                     system=system_txt,
                     messages=msgs,
-                    max_tokens=800,  # Increased to allow for complete JSON responses
+                    max_tokens=1200,  # Increased to allow for complete JSON responses
                     temperature=0.1,
                     timeout=30.0,  # 30 second timeout
                 )
@@ -262,6 +273,16 @@ class AIAgentService:
                         obj = json.loads(json_text)
                         if isinstance(obj, dict) and "next_question" in obj:
                             return obj
+                except json.JSONDecodeError as e:
+                    logger.debug(f"Fixed JSON parsing failed: {e}")
+                
+                # Try to fix common JSON issues (single quotes, True/False, etc.)
+                try:
+                    fixed_text = text.replace("'", '"').replace('True', 'true').replace('False', 'false').replace('None', 'null')
+                    obj = json.loads(fixed_text)
+                    if isinstance(obj, dict) and "next_question" in obj:
+                        logger.debug("Fixed JSON parsing succeeded")
+                        return obj
                 except json.JSONDecodeError as e:
                     logger.debug(f"Fixed JSON parsing failed: {e}")
                 
