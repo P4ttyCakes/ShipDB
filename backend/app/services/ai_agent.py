@@ -293,7 +293,7 @@ class AIAgentService:
                     model=self._model_name,
                     system=system_txt,
                     messages=msgs,
-                    max_tokens=1200,  # Increased to allow for complete JSON responses
+                    max_tokens=4000,  # Significantly increased to allow for complete JSON responses
                     temperature=0.0,
                     timeout=30.0,  # 30 second timeout
                 )
@@ -469,48 +469,6 @@ class AIAgentService:
                 except Exception as e:
                     logger.debug(f"Malformed JSON fix failed: {e}")
                 
-                # Try to extract partial JSON and reconstruct
-                try:
-                    # Look for the start of the JSON response
-                    start_marker = text.find('{"next_question"')
-                    if start_marker != -1:
-                        # Try to find a complete JSON object by counting braces
-                        brace_count = 0
-                        json_end = start_marker
-                        in_string = False
-                        escape_next = False
-                        
-                        for i, char in enumerate(text[start_marker:], start_marker):
-                            if escape_next:
-                                escape_next = False
-                                continue
-                                
-                            if char == '\\':
-                                escape_next = True
-                                continue
-                                
-                            if char == '"' and not escape_next:
-                                in_string = not in_string
-                                continue
-                                
-                            if not in_string:
-                                if char == '{':
-                                    brace_count += 1
-                                elif char == '}':
-                                    brace_count -= 1
-                                    if brace_count == 0:
-                                        json_end = i + 1
-                                        break
-                        
-                        if brace_count == 0:  # Found complete JSON
-                            json_text = text[start_marker:json_end]
-                            obj = json.loads(json_text)
-                            if isinstance(obj, dict) and "next_question" in obj:
-                                logger.debug("Partial JSON reconstruction succeeded")
-                                return obj
-                except Exception as e:
-                    logger.debug(f"Partial JSON reconstruction failed: {e}")
-                
                 # If all JSON parsing fails, create a context-aware fallback response
                 logger.warning(f"Could not parse AI response as JSON, creating fallback. Response: {text[:100]}...")
                 
@@ -535,114 +493,13 @@ class AIAgentService:
                     elif "ecommerce" in project_context.lower() or "store" in project_context.lower():
                         app_type = "E-commerce Platform"
                     
-                    # Generate context-aware entities for fallback
-                    entities = []
-                    if "healthcare" in project_context.lower() or "medical" in project_context.lower():
-                        entities = [
-                            {
-                                "name": "patients",
-                                "fields": [
-                                    {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                                    {"name": "name", "type": "string", "required": True},
-                                    {"name": "email", "type": "string", "required": True, "unique": True},
-                                    {"name": "phone", "type": "string", "required": False},
-                                    {"name": "created_at", "type": "timestamp", "required": True}
-                                ]
-                            },
-                            {
-                                "name": "doctors",
-                                "fields": [
-                                    {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                                    {"name": "name", "type": "string", "required": True},
-                                    {"name": "specialty", "type": "string", "required": True},
-                                    {"name": "email", "type": "string", "required": True, "unique": True},
-                                    {"name": "created_at", "type": "timestamp", "required": True}
-                                ]
-                            },
-                            {
-                                "name": "appointments",
-                                "fields": [
-                                    {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                                    {"name": "patient_id", "type": "uuid", "required": True, "foreign_key": {"table": "patients", "field": "id"}},
-                                    {"name": "doctor_id", "type": "uuid", "required": True, "foreign_key": {"table": "doctors", "field": "id"}},
-                                    {"name": "appointment_date", "type": "timestamp", "required": True},
-                                    {"name": "status", "type": "string", "required": True}
-                                ]
-                            }
-                        ]
-                    elif "ecommerce" in project_context.lower() or "store" in project_context.lower():
-                        entities = [
-                            {
-                                "name": "products",
-                                "fields": [
-                                    {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                                    {"name": "name", "type": "string", "required": True},
-                                    {"name": "price", "type": "decimal", "required": True},
-                                    {"name": "inventory_count", "type": "integer", "required": True},
-                                    {"name": "created_at", "type": "timestamp", "required": True}
-                                ]
-                            },
-                            {
-                                "name": "customers",
-                                "fields": [
-                                    {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                                    {"name": "name", "type": "string", "required": True},
-                                    {"name": "email", "type": "string", "required": True, "unique": True},
-                                    {"name": "phone", "type": "string", "required": False},
-                                    {"name": "created_at", "type": "timestamp", "required": True}
-                                ]
-                            },
-                            {
-                                "name": "orders",
-                                "fields": [
-                                    {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                                    {"name": "customer_id", "type": "uuid", "required": True, "foreign_key": {"table": "customers", "field": "id"}},
-                                    {"name": "order_date", "type": "timestamp", "required": True},
-                                    {"name": "status", "type": "string", "required": True},
-                                    {"name": "created_at", "type": "timestamp", "required": True}
-                                ]
-                            },
-                            {
-                                "name": "order_items",
-                                "fields": [
-                                    {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                                    {"name": "order_id", "type": "uuid", "required": True, "foreign_key": {"table": "orders", "field": "id"}},
-                                    {"name": "product_id", "type": "uuid", "required": True, "foreign_key": {"table": "products", "field": "id"}},
-                                    {"name": "quantity", "type": "integer", "required": True},
-                                    {"name": "unit_price", "type": "decimal", "required": True}
-                                ]
-                            }
-                        ]
-                    else:
-                        # Generic fallback entities
-                        entities = [
-                            {
-                                "name": "users",
-                                "fields": [
-                                    {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                                    {"name": "name", "type": "string", "required": True},
-                                    {"name": "email", "type": "string", "required": True, "unique": True},
-                                    {"name": "created_at", "type": "timestamp", "required": True}
-                                ]
-                            },
-                            {
-                                "name": "items",
-                                "fields": [
-                                    {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                                    {"name": "name", "type": "string", "required": True},
-                                    {"name": "description", "type": "text", "required": False},
-                                    {"name": "created_at", "type": "timestamp", "required": True}
-                                ]
-                            }
-                        ]
-                    
                     return {
                         "next_question": "Perfect! I have enough information to create your database design.",
                         "done": True,
                         "partial_spec": {
                             "app_type": app_type,
                             "db_type": "postgresql",
-                            "entities": entities
+                            "entities": []
                         }
                     }
                 else:
@@ -693,9 +550,9 @@ class AIAgentService:
                     {
                         "name": "patients",
                         "fields": [
-                            {"name": "id", "type": "uuid", "required": True, "primary_key": True},
+                            {"name": "id", "type": "uuid", "required": True},
                             {"name": "name", "type": "string", "required": True},
-                            {"name": "email", "type": "string", "required": True, "unique": True},
+                            {"name": "email", "type": "string", "required": True},
                             {"name": "phone", "type": "string", "required": False},
                             {"name": "created_at", "type": "timestamp", "required": True}
                         ]
@@ -703,19 +560,19 @@ class AIAgentService:
                     {
                         "name": "doctors",
                         "fields": [
-                            {"name": "id", "type": "uuid", "required": True, "primary_key": True},
+                            {"name": "id", "type": "uuid", "required": True},
                             {"name": "name", "type": "string", "required": True},
                             {"name": "specialty", "type": "string", "required": True},
-                            {"name": "email", "type": "string", "required": True, "unique": True},
+                            {"name": "email", "type": "string", "required": True},
                             {"name": "created_at", "type": "timestamp", "required": True}
                         ]
                     },
                     {
                         "name": "appointments",
                         "fields": [
-                            {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                            {"name": "patient_id", "type": "uuid", "required": True, "foreign_key": {"table": "patients", "field": "id"}},
-                            {"name": "doctor_id", "type": "uuid", "required": True, "foreign_key": {"table": "doctors", "field": "id"}},
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "patient_id", "type": "uuid", "required": True},
+                            {"name": "doctor_id", "type": "uuid", "required": True},
                             {"name": "appointment_date", "type": "timestamp", "required": True},
                             {"name": "status", "type": "string", "required": True}
                         ]

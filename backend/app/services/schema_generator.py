@@ -333,6 +333,8 @@ def to_dynamodb_defs(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
             pk_name = pk_fields[1]["name"]
             key_schema.append({"AttributeName": pk_name, "KeyType": "RANGE"})
             attr_set.add(pk_name)
+        
+        # Add all primary key fields to attribute definitions
         for f in ent.get("fields", []):
             if f["name"] in attr_set:
                 t = _normalize_type(f.get("type"))
@@ -351,6 +353,29 @@ def to_dynamodb_defs(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
         }
         # GSIs (optional)
         gsis = []
+        
+        # First, add GSIs for foreign key fields (automatic)
+        fk_fields = [f for f in ent.get("fields", []) if f.get("foreign_key")]
+        for fk_field in fk_fields:
+            fk_name = fk_field["name"]
+            fk_table = fk_field.get("foreign_key", {}).get("table", "")
+            
+            # Add foreign key attribute to attribute definitions if not already there
+            if fk_name not in [a["AttributeName"] for a in attr_defs]:
+                t = _normalize_type(fk_field.get("type"))
+                dynamo_t = "S" if t in ["string", "date", "datetime", "uuid"] else ("N" if t in ["int", "integer", "float", "number"] else "S")
+                attr_defs.append({"AttributeName": fk_name, "AttributeType": dynamo_t})
+            
+            # Create GSI for foreign key queries (e.g., "find all properties for user_id")
+            gsi_name = f"{ent['name']}_{fk_name}_gsi"
+            gsis.append({
+                "IndexName": gsi_name,
+                "KeySchema": [{"AttributeName": fk_name, "KeyType": "HASH"}],
+                "Projection": {"ProjectionType": "ALL"},
+                "ProvisionedThroughput": provisioned,
+            })
+        
+        # Then add explicit indexes from the spec
         for idx in ent.get("indexes", []) or []:
             fields = idx.get("fields") or []
             if not fields:
