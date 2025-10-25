@@ -29,6 +29,7 @@ class AIAgentService:
     def _system_instruction(self) -> str:
         """Return the instruction used to constrain the model to a JSON control response."""
         return (
+            "CRITICAL: You must respond with ONLY valid JSON. Start with { and end with }. No other text. "
             "You are a senior database architect and domain expert with deep business intelligence. "
             "When given ANY request to build a database system, you must: "
             "\n\n"
@@ -105,13 +106,16 @@ class AIAgentService:
             "\n\n"
             "CRITICAL JSON FORMAT REQUIREMENT: "
             "You MUST respond with ONLY a valid JSON object. No other text, explanations, or formatting. "
+            "ABSOLUTE REQUIREMENT: Your response must start with the character { and end with }. "
+            "Any text before { or after } will cause the system to fail. "
+            "Do not include any explanatory text, greetings, or phrases. "
             "The JSON must have exactly these keys: next_question, done, partial_spec "
             "\n\n"
             "Example response format: "
             '{"next_question": "What type of users will use this system?", "done": false, "partial_spec": {}}'
             "\n\n"
             "Example COMPLETE response when done=true: "
-            '{"next_question": "Perfect! I have enough information to create your database design.", "done": true, "partial_spec": {"app_type": "Healthcare Management System", "db_type": "postgresql", "entities": [{"name": "patients", "fields": [{"name": "id", "type": "uuid", "required": true}, {"name": "name", "type": "string", "required": true}, {"name": "email", "type": "string", "required": true}]}, {"name": "doctors", "fields": [{"name": "id", "type": "uuid", "required": true}, {"name": "name", "type": "string", "required": true}, {"name": "specialty", "type": "string", "required": true}]}]}}'
+            '{"next_question": "Perfect! I have enough information to create your database design.", "done": true, "partial_spec": {"app_type": "Healthcare Management System", "db_type": "postgresql", "entities": [{"name": "patients", "fields": [{"name": "id", "type": "uuid", "required": true}, {"name": "name", "type": "string", "required": true}, {"name": "email", "type": "string", "required": true}, {"name": "phone", "type": "string", "required": false}, {"name": "date_of_birth", "type": "date", "required": false}, {"name": "created_at", "type": "timestamp", "required": true}]}, {"name": "doctors", "fields": [{"name": "id", "type": "uuid", "required": true}, {"name": "name", "type": "string", "required": true}, {"name": "specialty", "type": "string", "required": true}, {"name": "license_number", "type": "string", "required": true}, {"name": "email", "type": "string", "required": true}, {"name": "created_at", "type": "timestamp", "required": true}]}, {"name": "appointments", "fields": [{"name": "id", "type": "uuid", "required": true}, {"name": "patient_id", "type": "uuid", "required": true}, {"name": "doctor_id", "type": "uuid", "required": true}, {"name": "appointment_date", "type": "timestamp", "required": true}, {"name": "status", "type": "string", "required": true}, {"name": "notes", "type": "text", "required": false}]}]}}'
             "\n\n"
             "JSON VALIDATION RULES: "
             "- Start response with { and end with } "
@@ -127,14 +131,56 @@ class AIAgentService:
             "- entities: array of objects with 'name' and 'fields' "
             "- Each field must have: name, type, required (boolean), and appropriate constraints "
             "- Include primary keys, foreign keys, indexes, and relationships "
+            "- CRITICAL: Generate at least 3-5 entities for a complete system "
+            "- CRITICAL: Each entity must have at least 3-5 fields "
+            "\n\n"
+            "ENTITY GENERATION REQUIREMENTS: "
+            "When you set done=true, you MUST generate complete entities in the JSON response. "
+            "Do NOT rely on fallback logic. Generate appropriate entities based on the business domain: "
+            "- Healthcare: patients, doctors, appointments, medical_records, prescriptions "
+            "- E-commerce: users, products, orders, order_items, categories "
+            "- Real Estate: users, properties, favorites, property_views, agents "
+            "- Stock Trading: users, stocks, transactions, portfolios, watchlists "
+            "- Education: students, courses, enrollments, assignments, grades "
+            "- Social: users, posts, comments, likes, follows "
+            "\n\n"
+            "INTELLIGENT COMPLETION: "
+            "When you have enough information to create a complete database design, set done=true. "
+            "You have enough information when you understand the business domain and can generate "
+            "appropriate entities with proper fields. Don't ask unnecessary questions - "
+            "generate a working database design based on what you know. "
+            "\n\n"
+            "CRITICAL: When done=true, you MUST include complete entities in the partial_spec. "
+            "Do NOT set done=true with empty entities. Generate at least 3-5 entities with "
+            "proper fields for each entity. This is MANDATORY for successful schema generation."
             "\n\n"
             "CONVERSATION COMPLETION DETECTION: "
             "Set done=true when you have enough information to create a complete database design. "
-            "This typically happens when: "
+            "You have enough information when: "
             "- You understand the business domain and core entities "
             "- You know the main data fields and relationships needed "
             "- You have sufficient context to make intelligent database choices "
-            "- The user has provided 2-4 substantial answers about their business "
+            "\n\n"
+            "COMPLETION STRATEGY: "
+            "After 2-3 user responses, you should have enough information to complete. "
+            "Don't ask for every possible detail - generate a working database design "
+            "based on the business domain and common patterns. "
+            "It's better to generate a complete design than to ask more questions. "
+            "\n\n"
+            "FORCE COMPLETION: "
+            "If the user has provided information about the business domain and main entities, "
+            "you MUST set done=true and generate complete entities. "
+            "Do not ask for more details - create a working database design now. "
+            "\n\n"
+            "COMPLETION TRIGGERS: "
+            "Set done=true when you see these keywords in user responses: "
+            "- 'billing, insurance, compliance' "
+            "- 'patients, doctors, appointments' "
+            "- 'medical records' "
+            "- 'that covers all' "
+            "- 'that's everything' "
+            "- 'no other requirements' "
+            "These indicate the user has provided sufficient information."
             "\n\n"
             "When you conclude the conversation, use phrases like: "
             "- 'Perfect! I have enough information to create your database design.' "
@@ -219,7 +265,7 @@ class AIAgentService:
                     system=system_txt,
                     messages=msgs,
                     max_tokens=1200,  # Increased to allow for complete JSON responses
-                    temperature=0.1,
+                    temperature=0.0,
                     timeout=30.0,  # 30 second timeout
                 )
                 
@@ -238,11 +284,12 @@ class AIAgentService:
                 try:
                     obj = json.loads(text.strip())
                     if isinstance(obj, dict) and "next_question" in obj:
+                        logger.debug("Direct JSON parsing succeeded")
                         return obj
                 except json.JSONDecodeError as e:
                     logger.debug(f"Direct JSON parsing failed: {e}")
                 
-                # Try to extract JSON block from text
+                # Try to extract JSON block from text (more aggressive)
                 start = text.find("{")
                 end = text.rfind("}")
                 if start != -1 and end != -1 and end > start:
@@ -250,9 +297,22 @@ class AIAgentService:
                     try:
                         obj = json.loads(json_text)
                         if isinstance(obj, dict) and "next_question" in obj:
+                            logger.debug("Extracted JSON parsing succeeded")
                             return obj
                     except json.JSONDecodeError as e:
                         logger.debug(f"Extracted JSON parsing failed: {e}")
+                
+                # Try to extract JSON with newline handling
+                lines = text.split('\n')
+                for line in lines:
+                    if line.strip().startswith('{'):
+                        try:
+                            obj = json.loads(line.strip())
+                            if isinstance(obj, dict) and "next_question" in obj:
+                                logger.debug("Line-based JSON parsing succeeded")
+                                return obj
+                        except json.JSONDecodeError:
+                            continue
                 
                 # Try to fix common JSON issues
                 try:
@@ -278,13 +338,107 @@ class AIAgentService:
                 
                 # Try to fix common JSON issues (single quotes, True/False, etc.)
                 try:
-                    fixed_text = text.replace("'", '"').replace('True', 'true').replace('False', 'false').replace('None', 'null')
+                    # Remove newlines and control characters, fix common issues
+                    fixed_text = text.replace('\n', '').replace('\r', '').replace('\t', ' ')
+                    fixed_text = fixed_text.replace("'", '"').replace('True', 'true').replace('False', 'false').replace('None', 'null')
+                    # Remove any text before the first { and after the last }
+                    start_idx = fixed_text.find('{')
+                    end_idx = fixed_text.rfind('}')
+                    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                        fixed_text = fixed_text[start_idx:end_idx + 1]
                     obj = json.loads(fixed_text)
                     if isinstance(obj, dict) and "next_question" in obj:
                         logger.debug("Fixed JSON parsing succeeded")
                         return obj
                 except json.JSONDecodeError as e:
                     logger.debug(f"Fixed JSON parsing failed: {e}")
+                
+                # Try regex-based JSON extraction for complex cases
+                try:
+                    import re
+                    # Find JSON object with more flexible pattern
+                    json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+                    matches = re.findall(json_pattern, text, re.DOTALL)
+                    for match in matches:
+                        try:
+                            # Clean up the match
+                            cleaned = match.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
+                            cleaned = cleaned.replace("'", '"').replace('True', 'true').replace('False', 'false').replace('None', 'null')
+                            obj = json.loads(cleaned)
+                            if isinstance(obj, dict) and "next_question" in obj:
+                                logger.debug("Regex JSON parsing succeeded")
+                                return obj
+                        except json.JSONDecodeError:
+                            continue
+                except Exception as e:
+                    logger.debug(f"Regex JSON parsing failed: {e}")
+                
+                # Try to reconstruct JSON from partial matches
+                try:
+                    # Find all potential JSON fragments
+                    fragments = []
+                    in_json = False
+                    brace_count = 0
+                    current_fragment = ""
+                    
+                    for char in text:
+                        if char == '{':
+                            if not in_json:
+                                in_json = True
+                                current_fragment = ""
+                            current_fragment += char
+                            brace_count += 1
+                        elif char == '}' and in_json:
+                            current_fragment += char
+                            brace_count -= 1
+                            if brace_count == 0:
+                                fragments.append(current_fragment)
+                                in_json = False
+                        elif in_json:
+                            current_fragment += char
+                    
+                    # Try each fragment
+                    for fragment in fragments:
+                        try:
+                            cleaned = fragment.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
+                            cleaned = cleaned.replace("'", '"').replace('True', 'true').replace('False', 'false').replace('None', 'null')
+                            obj = json.loads(cleaned)
+                            if isinstance(obj, dict) and "next_question" in obj:
+                                logger.debug("Fragment JSON parsing succeeded")
+                                return obj
+                        except json.JSONDecodeError:
+                            continue
+                except Exception as e:
+                    logger.debug(f"Fragment JSON parsing failed: {e}")
+                
+                # Try to fix malformed JSON with common issues
+                try:
+                    import re
+                    # Handle common JSON malformations
+                    fixed_text = text
+                    
+                    # Fix unescaped quotes in strings
+                    fixed_text = re.sub(r'(?<!\\)"(?![,}\s])', r'\\"', fixed_text)
+                    
+                    # Fix missing commas
+                    fixed_text = re.sub(r'}\s*{', '},{', fixed_text)
+                    fixed_text = re.sub(r']\s*\[', '],[', fixed_text)
+                    
+                    # Fix trailing commas
+                    fixed_text = re.sub(r',\s*}', '}', fixed_text)
+                    fixed_text = re.sub(r',\s*]', ']', fixed_text)
+                    
+                    # Extract JSON from fixed text
+                    start_idx = fixed_text.find('{')
+                    end_idx = fixed_text.rfind('}')
+                    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                        json_text = fixed_text[start_idx:end_idx + 1]
+                        obj = json.loads(json_text)
+                        if isinstance(obj, dict) and "next_question" in obj:
+                            logger.debug("Malformed JSON fix succeeded")
+                            return obj
+                except Exception as e:
+                    logger.debug(f"Malformed JSON fix failed: {e}")
                 
                 # If all JSON parsing fails, create a context-aware fallback response
                 logger.warning(f"Could not parse AI response as JSON, creating fallback. Response: {text[:100]}...")
