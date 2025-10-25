@@ -13,3 +13,4 @@ class DeploymentFactory:
             DatabaseType.DYNAMODB: DynamoDBService()
         }
         return services.get(db_type)
+

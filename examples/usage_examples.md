@@ -280,3 +280,4 @@ for project, tables in projects.items():
 ---
 
 **Ready to build your applications!** 🚀
+

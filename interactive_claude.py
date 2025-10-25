@@ -19,13 +19,17 @@ def run_claude_request(prompt):
     print(f"\n📤 Sending request to Claude: '{prompt}'")
     print("-" * 50)
     
-    # Set up environment
-    os.environ['AWS_ACCESS_KEY_ID'] = 'your_aws_access_key'
-    os.environ['AWS_SECRET_ACCESS_KEY'] = 'your_aws_secret_key'
-    os.environ['AWS_REGION'] = 'us-east-1'
+    # Load environment variables from .env file
+    from dotenv import load_dotenv
+    load_dotenv()
     
-    # Create Claude client
-    api_key = "your_claude_api_key"
+    # Debug: Check if credentials are loaded
+    print(f"🔑 AWS_ACCESS_KEY_ID: {os.getenv('AWS_ACCESS_KEY_ID')[:10]}...")
+    print(f"🔑 AWS_SECRET_ACCESS_KEY: {os.getenv('AWS_SECRET_ACCESS_KEY')[:10]}...")
+    print(f"🔑 CLAUDE_API_KEY: {os.getenv('CLAUDE_API_KEY')[:10]}...")
+    
+    # Get credentials from environment
+    api_key = os.getenv('CLAUDE_API_KEY')
     claude_client = create_real_claude_session(api_key)
     
     try:
@@ -43,7 +47,7 @@ def run_claude_request(prompt):
         print(f"\n📊 Claude made {len(processed['function_results'])} function calls:")
         print("=" * 50)
         
-        successful_tables = []
+        successful_resources = []
         for i, result in enumerate(processed["function_results"], 1):
             print(f"\n{i}. Function: {result['function']}")
             print(f"   Success: {result['result']['success']}")
@@ -51,18 +55,22 @@ def run_claude_request(prompt):
             if result['result']['success']:
                 if 'table_name' in result['result']:
                     table_name = result['result']['table_name']
-                    successful_tables.append(table_name)
+                    successful_resources.append(f"DynamoDB Table: {table_name}")
                     print(f"   Table: {table_name}")
+                elif 'collection_name' in result['result']:
+                    collection_name = result['result']['collection_name']
+                    successful_resources.append(f"MongoDB Collection: {collection_name}")
+                    print(f"   Collection: {collection_name}")
                 if 'message' in result['result']:
                     print(f"   Message: {result['result']['message']}")
             else:
                 print(f"   Error: {result['result'].get('error', 'Unknown error')}")
             print("-" * 30)
         
-        if successful_tables:
-            print(f"\n🎉 SUCCESS! Created {len(successful_tables)} tables:")
-            for table in successful_tables:
-                print(f"   ✅ {table}")
+        if successful_resources:
+            print(f"\n🎉 SUCCESS! Created {len(successful_resources)} resources:")
+            for resource in successful_resources:
+                print(f"   ✅ {resource}")
         
         # Show Claude's text response
         if processed["claude_response"]["success"]:
@@ -89,9 +97,10 @@ def run_claude_request(prompt):
         return False
 
 def main():
-    print("🤖 Interactive Claude DynamoDB Builder")
+    print("🤖 Interactive Claude Database Builder")
     print("=" * 50)
     print("Tell Claude what database system you want to build!")
+    print("Supports both DynamoDB and MongoDB!")
     print("=" * 50)
     
     # Check if prompt provided as command line argument
@@ -114,6 +123,7 @@ def main():
         print("- 'Design a healthcare telemedicine system'")
         print("- 'Build a project management tool'")
         print("\nClaude will automatically analyze the domain and create comprehensive schemas!")
+        print("Claude can create both DynamoDB tables and MongoDB collections!")
         print("Type 'quit' to exit")
         
         try:

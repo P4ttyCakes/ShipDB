@@ -1,0 +1,37 @@
+Create MongoDB collections for a competition_db database with the following schemas:
+
+Collection: competitions
+Columns: id (string), name (string), description (string), start_date (date), end_date (date), location (string), created_at (date)
+
+Collection: participants
+Columns: id (string), competition_id (string), name (string), email (string), phone (string), created_at (date)
+Indexes: 2 indexes
+  - competition_id_idx: [competition_id:1]
+  - competition_participant_idx: [competition_id:1, name:1]
+
+Collection: results
+Columns: id (string), competition_id (string), participant_id (string), rank (int), score (double), created_at (date)
+Indexes: 4 indexes
+  - competition_id_idx: [competition_id:1]
+  - participant_id_idx: [participant_id:1]
+  - competition_rank_idx: [competition_id:1, rank:1]
+  - participant_competition_idx: [participant_id:1, competition_id:1]
+
+Collection: leaderboard
+Columns: id (string), competition_id (string), participant_id (string), total_score (double), rank (int), updated_at (date)
+Indexes: 3 indexes
+  - competition_id_idx: [competition_id:1]
+  - participant_id_idx: [participant_id:1]
+  - competition_leaderboard_idx: [competition_id:1, rank:1]
+
+Collection: media
+Columns: id (string), competition_id (string), participant_id (string), type (string), url (string), created_at (date)
+Indexes: 4 indexes
+  - competition_id_idx: [competition_id:1]
+  - participant_id_idx: [participant_id:1]
+  - competition_participant_media_idx: [competition_id:1, participant_id:1]
+  - media_type_time_idx: [type:1, created_at:-1]
+
+
+Use create_collection_advanced for each collection with the exact schema provided above. 
+Make sure to include all the indexes as specified. Database name should be 'competition_db'.

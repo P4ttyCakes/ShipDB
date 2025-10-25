@@ -20,3 +20,4 @@ def get_default_tags(project_id: str) -> list:
         {'Key': 'ManagedBy', 'Value': 'ShipDB'},
         {'Key': 'Environment', 'Value': 'hackathon'}
     ]
+

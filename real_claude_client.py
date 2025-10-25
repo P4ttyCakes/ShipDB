@@ -15,6 +15,7 @@ from typing import Dict, List, Any, Optional
 sys.path.append('backend')
 
 from claude_dynamodb_driver import call_function, FUNCTION_REGISTRY  # type: ignore
+from claude_mongodb_driver import call_mongodb_function, MONGODB_FUNCTION_REGISTRY  # type: ignore
 
 class RealClaudeAPIClient:
     """Real Claude API client using official Anthropic library"""
@@ -26,6 +27,97 @@ class RealClaudeAPIClient:
     def create_function_tools(self) -> List[Dict[str, Any]]:
         """Create function tool definitions for Claude"""
         tools = []
+
+        # MongoDB function definitions - Enhanced with complex operations
+        mongodb_functions = {
+            "create_collection_simple": {
+                "name": "create_collection_simple",
+                "description": "Create a simple MongoDB collection with basic indexes",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "collection_name": {"type": "string", "description": "Name of the collection"},
+                        "indexes": {"type": "array", "items": {"type": "string"}, "description": "List of index fields"},
+                        "database_name": {"type": "string", "description": "Database name prefix (optional)"}
+                    },
+                    "required": ["collection_name", "indexes"]
+                }
+            },
+            "create_collection_advanced": {
+                "name": "create_collection_advanced",
+                "description": "Create MongoDB collection with advanced features (compound indexes, unique constraints, sparse indexes, TTL, text search, geospatial)",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "collection_schema": {
+                            "type": "object",
+                            "description": "Complete MongoDB collection schema with compound indexes, unique constraints, sparse indexes, text search, TTL indexes"
+                        },
+                        "database_name": {"type": "string", "description": "Database name prefix (optional)"}
+                    },
+                    "required": ["collection_schema"]
+                }
+            },
+            "create_index": {
+                "name": "create_index",
+                "description": "Create a specific index on an existing MongoDB collection (compound, unique, sparse, text, geospatial, TTL)",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "collection_name": {"type": "string", "description": "Name of the collection"},
+                        "index_definition": {
+                            "type": "object",
+                            "description": "Complex index definition with keys, name, unique, sparse, ttl, text, 2dsphere, etc."
+                        },
+                        "database_name": {"type": "string", "description": "Database name prefix (optional)"}
+                    },
+                    "required": ["collection_name", "index_definition"]
+                }
+            },
+            "query_collection": {
+                "name": "query_collection",
+                "description": "Advanced MongoDB query with aggregation pipeline, filters, sorting, projection, pagination, and analytics",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "collection_name": {"type": "string", "description": "Name of the collection to query"},
+                        "query": {"type": "object", "description": "MongoDB query filter with advanced operators"},
+                        "projection": {"type": "object", "description": "Fields to include/exclude in results"},
+                        "sort": {"type": "object", "description": "Sort specification"},
+                        "database_name": {"type": "string", "description": "Database name prefix (optional)"},
+                        "limit": {"type": "integer", "description": "Maximum number of documents to return"},
+                        "skip": {"type": "integer", "description": "Number of documents to skip for pagination"}
+                    },
+                    "required": ["collection_name", "query"]
+                }
+            },
+            "insert_document": {
+                "name": "insert_document",
+                "description": "Insert a single document into MongoDB collection",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "collection_name": {"type": "string", "description": "Name of the collection"},
+                        "document": {"type": "object", "description": "Document to insert"},
+                        "database_name": {"type": "string", "description": "Database name prefix (optional)"}
+                    },
+                    "required": ["collection_name", "document"]
+                }
+            },
+            "list_collections": {
+                "name": "list_collections",
+                "description": "List all collections in a MongoDB database with metadata",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "database_name": {"type": "string", "description": "Database name (optional)"}
+                    },
+                    "required": []
+                }
+            }
+        }
+        
+
         
         # DynamoDB function definitions
         dynamodb_functions = {
@@ -161,6 +253,9 @@ class RealClaudeAPIClient:
         }
         
         # Convert to Claude tool format
+        for func_name, func_def in mongodb_functions.items():
+            tools.append(func_def)
+        
         for func_name, func_def in dynamodb_functions.items():
             tools.append(func_def)
         
@@ -171,68 +266,42 @@ class RealClaudeAPIClient:
         
         tools = self.create_function_tools()
         
-        # Enhanced system prompt for deep analysis
+        # Enhanced system prompt - Concise, intricate, and complex
         enhanced_system_prompt = """
-        You are a senior database architect and domain expert with deep business intelligence. When given ANY request to build a database system, you must:
+        You are an elite database architect orchestrating sophisticated, production-grade systems. Execute:
 
-        🔍 DEEP DOMAIN ANALYSIS PROCESS:
-        1. ANALYZE THE BUSINESS MODEL: Understand the core business, revenue streams, user types, and value propositions
-        2. IDENTIFY STAKEHOLDERS: Who are the users, admins, partners, regulators, and third-party integrations?
-        3. MAP USER JOURNEYS: Trace complete user workflows from onboarding to core operations to offboarding
-        4. IDENTIFY BUSINESS PROCESSES: What are the key operations, transactions, and business rules?
-        5. CONSIDER REGULATORY REQUIREMENTS: What compliance, audit, and legal requirements exist?
-        6. ANALYZE DATA RELATIONSHIPS: How do entities connect? What are the cardinalities and dependencies?
-        7. IDENTIFY PERFORMANCE PATTERNS: What are the common queries, search patterns, and analytics needs?
+        🔬 ANALYTICAL RIGOR:
+        Deconstruct domains into: business model anatomy → stakeholder ecosystems → transactional workflows → regulatory compliance → relationship topologies → query optimization patterns
 
-        🏗️ COMPREHENSIVE SCHEMA DESIGN:
-        - Design for REAL BUSINESS OPERATIONS, not just basic CRUD
-        - Include ALL necessary tables for a production system
-        - Consider edge cases, error handling, and data integrity
-        - Design for scalability, performance, and maintainability
-        - Include proper indexes for common query patterns
-        - Consider data archival, backup, and recovery needs
+        🏛️ ARCHITECTURAL EXCELLENCE:
+        • Production-ready schemas with: ACID guarantees, referential integrity, audit trails, business logic constraints
+        • Scalability: sharding strategies, index optimization, query performance profiling
+        • Operational excellence: disaster recovery, data archival, monitoring instrumentation
+        • Security: multi-layer authentication, encryption at rest/transit, compliance frameworks
 
-        🎯 DOMAIN-SPECIFIC INTELLIGENCE:
-        For ANY domain, think deeply about:
-        - User management (roles, permissions, authentication, profiles)
-        - Core business entities and their lifecycle
-        - Transaction processing and financial flows
-        - Communication and notification systems
-        - Analytics, reporting, and business intelligence
-        - Audit trails and compliance tracking
-        - Integration points with external systems
-        - Performance optimization and caching needs
-        - Security, privacy, and data protection
-        - Error handling and system monitoring
+        🎯 MONGODB INTELLIGENCE:
+        Collections require:
+        - Strategic indexing: compound indexes on query patterns, unique constraints on business keys, sparse indexes for optional fields
+        - Text search: full-text indexes with language-specific stemming
+        - Geospatial: 2dsphere indexes for location-based queries
+        - TTL indexes: automatic document expiration for temporary data
+        - Aggregation pipelines: complex joins via $lookup, data transformation, analytics pipelines
+        - Transactions: multi-document ACID operations for consistency
+        - Change streams: real-time event sourcing for microservices architectures
 
-        📋 SCHEMA REQUIREMENTS:
-        Each table MUST include:
-        - TableName (descriptive and clear)
-        - KeySchema (HASH and RANGE keys where appropriate)
-        - AttributeDefinitions (all attributes used in keys and indexes)
-        - GlobalSecondaryIndexes (for performance optimization)
-        - BillingMode: "PROVISIONED"
-        - ProvisionedThroughput: {"ReadCapacityUnits": 5, "WriteCapacityUnits": 5}
+        🗄️ DYNAMODB MASTERY:
+        Tables require:
+        - Key design: HASH/RANGE patterns, GSI/LSI for query patterns, projection optimization
+        - Access patterns: item access vs. query vs. scan optimization
+        - Transactional integrity: conditional writes, optimistic locking
+        - Streams: CDC for event-driven architectures
+        - Performance: provisioned vs on-demand, autoscaling, DAX caching
 
-        ⚡ EXECUTION INSTRUCTIONS:
-        - Use create_table_advanced for EACH table individually
-        - Generate complete, production-ready schemas
-        - Create multiple tables by calling create_table_advanced multiple times
-        - Be thorough - include ALL tables a real business would need
-        - Think like you're building a system that will handle millions of users and transactions
+        ⚡ EXECUTION MANIFESTO:
+        MongoDB: Use create_collection_advanced with complex index definitions (compound, unique, sparse, text, geospatial, TTL).
+        DynamoDB: Use create_table_advanced with complete schemas (KeySchema, AttributeDefinitions, GSI/LSI).
 
-        🧠 EXAMPLES OF DEEP THINKING:
-        For "peer-to-peer lending marketplace":
-        - Borrowers (credit scoring, verification, loan applications)
-        - Lenders (investment preferences, risk tolerance, portfolio management)
-        - Loans (terms, interest rates, repayment schedules, status tracking)
-        - Transactions (payments, fees, escrow, settlements)
-        - Credit assessments (scoring models, verification data, risk analysis)
-        - Compliance (regulatory reporting, audit trails, KYC/AML)
-        - Communication (notifications, messaging, dispute resolution)
-        - Analytics (performance metrics, risk analysis, market trends)
-
-        Always think beyond the obvious and create systems that could actually run a real business at scale.
+        Think architecturally. Build systems that handle millions of users, petabytes of data, sub-millisecond queries, 99.99% uptime.
         """
         
         try:
@@ -261,6 +330,9 @@ class RealClaudeAPIClient:
     
     def execute_function_call(self, function_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a function call and return the result"""
+        # Check if it's a MongoDB function
+        if function_name in MONGODB_FUNCTION_REGISTRY:
+            return call_mongodb_function(function_name, **parameters)
         return call_function(function_name, **parameters)
     
     def process_claude_response(self, claude_response: Dict[str, Any]) -> Dict[str, Any]:

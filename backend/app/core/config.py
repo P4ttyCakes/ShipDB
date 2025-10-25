@@ -23,6 +23,16 @@ class Settings(BaseSettings):
     MONGODB_ATLAS_PRIVATE_KEY: Optional[str] = None
     MONGODB_ATLAS_PROJECT_ID: Optional[str] = None
     
+    # MongoDB Atlas Service Account (OAuth 2.0)
+    MONGODB_ATLAS_SERVICE_CLIENT_ID: Optional[str] = None
+    MONGODB_ATLAS_SERVICE_CLIENT_SECRET: Optional[str] = None
+    
+    # Claude AI
+    CLAUDE_API_KEY: Optional[str] = None
+    
+    # Other
+    PASSWORD: Optional[str] = None
+    
     # AWS Additional Settings
     AWS_DEFAULT_VPC_ID: Optional[str] = None  # For RDS security group
     RDS_MASTER_USERNAME: str = "shipdb_admin"
@@ -33,6 +43,7 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
         case_sensitive = True
 
 

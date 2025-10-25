@@ -16,6 +16,10 @@ class ClaudeDynamoDBDriver:
     """DynamoDB functions that Claude can call"""
     
     def __init__(self):
+        # Load environment variables from .env file
+        from dotenv import load_dotenv
+        load_dotenv()
+        
         self.dynamodb = boto3.client(
             'dynamodb',
             aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
