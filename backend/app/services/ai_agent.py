@@ -191,227 +191,7 @@ class AIAgentService:
             msgs.append({"role": "user", "content": last_user})
         return msgs
     
-    def _generate_basic_entities_from_context(self, history: List[Dict], answer: str) -> List[Dict]:
-        """Generate comprehensive entities based on conversation context when user wants to proceed"""
-        entities = []
-        
-        # Extract business context from conversation
-        full_conversation = " ".join([msg.get("content", "") for msg in history + [{"content": answer}]])
-        full_conversation_lower = full_conversation.lower()
-        
-        # Stock/Investment Platform entities
-        if any(word in full_conversation_lower for word in ["stock", "investment", "portfolio", "trading", "investor", "shares", "market"]):
-            entities.extend([
-                {
-                    "name": "users",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "email", "type": "string", "required": True, "unique": True},
-                        {"name": "name", "type": "string", "required": True},
-                        {"name": "role", "type": "string", "required": True},
-                        {"name": "account_balance", "type": "decimal", "required": False},
-                        {"name": "risk_tolerance", "type": "string", "required": False},
-                        {"name": "created_at", "type": "timestamp", "required": True},
-                        {"name": "updated_at", "type": "timestamp", "required": True}
-                    ]
-                },
-                {
-                    "name": "stocks",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "symbol", "type": "string", "required": True, "unique": True},
-                        {"name": "company_name", "type": "string", "required": True},
-                        {"name": "current_price", "type": "decimal", "required": True},
-                        {"name": "price_change", "type": "decimal", "required": False},
-                        {"name": "volume", "type": "integer", "required": False},
-                        {"name": "market_cap", "type": "decimal", "required": False},
-                        {"name": "last_updated", "type": "timestamp", "required": True}
-                    ]
-                },
-                {
-                    "name": "portfolios",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "user_id", "type": "uuid", "required": True},
-                        {"name": "stock_id", "type": "uuid", "required": True},
-                        {"name": "quantity", "type": "integer", "required": True},
-                        {"name": "purchase_price", "type": "decimal", "required": True},
-                        {"name": "purchase_date", "type": "timestamp", "required": True},
-                        {"name": "current_value", "type": "decimal", "required": False}
-                    ]
-                },
-                {
-                    "name": "transactions",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "user_id", "type": "uuid", "required": True},
-                        {"name": "stock_id", "type": "uuid", "required": True},
-                        {"name": "transaction_type", "type": "string", "required": True},
-                        {"name": "quantity", "type": "integer", "required": True},
-                        {"name": "price_per_share", "type": "decimal", "required": True},
-                        {"name": "total_amount", "type": "decimal", "required": True},
-                        {"name": "transaction_date", "type": "timestamp", "required": True},
-                        {"name": "status", "type": "string", "required": True}
-                    ]
-                }
-            ])
-        
-        # Real Estate Platform entities
-        elif any(word in full_conversation_lower for word in ["property", "real estate", "rent", "buy", "apartment", "house", "condo"]):
-            entities.extend([
-                {
-                    "name": "users",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "email", "type": "string", "required": True, "unique": True},
-                        {"name": "name", "type": "string", "required": True},
-                        {"name": "role", "type": "string", "required": True},
-                        {"name": "phone", "type": "string", "required": False},
-                        {"name": "preferred_location", "type": "string", "required": False},
-                        {"name": "budget_range", "type": "string", "required": False},
-                        {"name": "created_at", "type": "timestamp", "required": True}
-                    ]
-                },
-                {
-                    "name": "properties",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "title", "type": "string", "required": True},
-                        {"name": "description", "type": "text", "required": False},
-                        {"name": "property_type", "type": "string", "required": True},
-                        {"name": "bedrooms", "type": "integer", "required": True},
-                        {"name": "bathrooms", "type": "integer", "required": True},
-                        {"name": "square_footage", "type": "integer", "required": False},
-                        {"name": "price", "type": "decimal", "required": True},
-                        {"name": "address", "type": "string", "required": True},
-                        {"name": "city", "type": "string", "required": True},
-                        {"name": "state", "type": "string", "required": True},
-                        {"name": "zip_code", "type": "string", "required": True},
-                        {"name": "owner_id", "type": "uuid", "required": True},
-                        {"name": "status", "type": "string", "required": True},
-                        {"name": "created_at", "type": "timestamp", "required": True},
-                        {"name": "updated_at", "type": "timestamp", "required": True}
-                    ]
-                },
-                {
-                    "name": "favorites",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "user_id", "type": "uuid", "required": True},
-                        {"name": "property_id", "type": "uuid", "required": True},
-                        {"name": "created_at", "type": "timestamp", "required": True}
-                    ]
-                },
-                {
-                    "name": "property_views",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "user_id", "type": "uuid", "required": True},
-                        {"name": "property_id", "type": "uuid", "required": True},
-                        {"name": "view_date", "type": "timestamp", "required": True},
-                        {"name": "duration_seconds", "type": "integer", "required": False}
-                    ]
-                }
-            ])
-        
-        # E-commerce entities
-        elif any(word in full_conversation_lower for word in ["product", "ecommerce", "store", "inventory", "order", "shopping"]):
-            entities.extend([
-                {
-                    "name": "users",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "email", "type": "string", "required": True, "unique": True},
-                        {"name": "name", "type": "string", "required": True},
-                        {"name": "phone", "type": "string", "required": False},
-                        {"name": "address", "type": "text", "required": False},
-                        {"name": "created_at", "type": "timestamp", "required": True}
-                    ]
-                },
-                {
-                    "name": "products",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "name", "type": "string", "required": True},
-                        {"name": "description", "type": "text", "required": False},
-                        {"name": "price", "type": "decimal", "required": True},
-                        {"name": "inventory_count", "type": "integer", "required": True},
-                        {"name": "category", "type": "string", "required": True},
-                        {"name": "sku", "type": "string", "required": True, "unique": True},
-                        {"name": "weight", "type": "decimal", "required": False},
-                        {"name": "dimensions", "type": "string", "required": False},
-                        {"name": "created_at", "type": "timestamp", "required": True},
-                        {"name": "updated_at", "type": "timestamp", "required": True}
-                    ]
-                },
-                {
-                    "name": "orders",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "user_id", "type": "uuid", "required": True},
-                        {"name": "order_number", "type": "string", "required": True, "unique": True},
-                        {"name": "total_amount", "type": "decimal", "required": True},
-                        {"name": "status", "type": "string", "required": True},
-                        {"name": "shipping_address", "type": "text", "required": True},
-                        {"name": "payment_method", "type": "string", "required": True},
-                        {"name": "order_date", "type": "timestamp", "required": True},
-                        {"name": "shipped_date", "type": "timestamp", "required": False}
-                    ]
-                },
-                {
-                    "name": "order_items",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "order_id", "type": "uuid", "required": True},
-                        {"name": "product_id", "type": "uuid", "required": True},
-                        {"name": "quantity", "type": "integer", "required": True},
-                        {"name": "unit_price", "type": "decimal", "required": True},
-                        {"name": "total_price", "type": "decimal", "required": True}
-                    ]
-                }
-            ])
-        
-        # Default comprehensive entities if no specific business detected
-        else:
-            entities.extend([
-                {
-                    "name": "users",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "email", "type": "string", "required": True, "unique": True},
-                        {"name": "name", "type": "string", "required": True},
-                        {"name": "role", "type": "string", "required": True},
-                        {"name": "status", "type": "string", "required": True},
-                        {"name": "created_at", "type": "timestamp", "required": True},
-                        {"name": "updated_at", "type": "timestamp", "required": True}
-                    ]
-                },
-                {
-                    "name": "items",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "name", "type": "string", "required": True},
-                        {"name": "description", "type": "text", "required": False},
-                        {"name": "category", "type": "string", "required": False},
-                        {"name": "status", "type": "string", "required": True},
-                        {"name": "created_at", "type": "timestamp", "required": True},
-                        {"name": "updated_at", "type": "timestamp", "required": True}
-                    ]
-                },
-                {
-                    "name": "user_activities",
-                    "fields": [
-                        {"name": "id", "type": "uuid", "required": True, "primary_key": True},
-                        {"name": "user_id", "type": "uuid", "required": True},
-                        {"name": "activity_type", "type": "string", "required": True},
-                        {"name": "description", "type": "text", "required": False},
-                        {"name": "metadata", "type": "text", "required": False},
-                        {"name": "created_at", "type": "timestamp", "required": True}
-                    ]
-                }
-            ])
-        
-        return entities
+    # Removed hard-coded entity generation - AI should generate appropriate entities based on business analysis
 
     def _call_model(self, history: List[Dict[str, str]], user_msg: str) -> Dict[str, Any]:
         """Call Claude with retry/backoff, expecting a control JSON object."""
@@ -485,27 +265,53 @@ class AIAgentService:
                 except json.JSONDecodeError as e:
                     logger.debug(f"Fixed JSON parsing failed: {e}")
                 
-                # If all JSON parsing fails, create a fallback response
+                # If all JSON parsing fails, create a context-aware fallback response
                 logger.warning(f"Could not parse AI response as JSON, creating fallback. Response: {text[:100]}...")
                 
                 # Create a fallback response based on conversation context
                 conversation_rounds = len([msg for msg in history if msg.get("role") == "user"])
                 
+                # Extract project context from conversation history
+                project_context = ""
+                for msg in history:
+                    if msg.get("role") == "user" and msg.get("content"):
+                        project_context += msg.get("content", "") + " "
+                
                 if conversation_rounds >= 3:
-                    # If we've had enough conversation, try to complete
+                    # If we've had enough conversation, try to complete with context
+                    app_type = "Database application"
+                    if "healthcare" in project_context.lower() or "medical" in project_context.lower():
+                        app_type = "Healthcare Management System"
+                    elif "stock" in project_context.lower() or "trading" in project_context.lower():
+                        app_type = "Stock Trading Platform"
+                    elif "real estate" in project_context.lower() or "property" in project_context.lower():
+                        app_type = "Real Estate Platform"
+                    elif "ecommerce" in project_context.lower() or "store" in project_context.lower():
+                        app_type = "E-commerce Platform"
+                    
                     return {
                         "next_question": "Perfect! I have enough information to create your database design.",
                         "done": True,
                         "partial_spec": {
-                            "app_type": "Database application",
+                            "app_type": app_type,
                             "db_type": "postgresql",
                             "entities": []
                         }
                     }
                 else:
-                    # Continue the conversation
+                    # Continue the conversation with context-aware questions
+                    context_question = "What are the main features you want this system to have?"
+                    if "healthcare" in project_context.lower():
+                        context_question = "What type of healthcare practice is this for?"
+                    elif "stock" in project_context.lower():
+                        context_question = "What types of financial instruments will users trade?"
+                    elif "real estate" in project_context.lower():
+                        context_question = "What types of properties will you list?"
+                    elif "ecommerce" in project_context.lower():
+                        context_question = "What product categories will you sell?"
+                    
                     return {
-                        "next_question": "What are the main features you want this system to have?",
+                        "next_question": context_question,
                         "done": False,
                         "partial_spec": {}
                     }
@@ -523,19 +329,47 @@ class AIAgentService:
         logger.error("All Claude retries failed, using emergency fallback")
         conversation_rounds = len([msg for msg in history if msg.get("role") == "user"])
         
+        # Extract project context for emergency fallback
+        project_context = ""
+        for msg in history:
+            if msg.get("role") == "user" and msg.get("content"):
+                project_context += msg.get("content", "") + " "
+        
         if conversation_rounds >= 2:
+            # Context-aware app type for emergency completion
+            app_type = "Database application"
+            if "healthcare" in project_context.lower() or "medical" in project_context.lower():
+                app_type = "Healthcare Management System"
+            elif "stock" in project_context.lower() or "trading" in project_context.lower():
+                app_type = "Stock Trading Platform"
+            elif "real estate" in project_context.lower() or "property" in project_context.lower():
+                app_type = "Real Estate Platform"
+            elif "ecommerce" in project_context.lower() or "store" in project_context.lower():
+                app_type = "E-commerce Platform"
+            
             return {
                 "next_question": "Perfect! I have enough information to create your database design.",
                 "done": True,
                 "partial_spec": {
-                    "app_type": "Database application",
+                    "app_type": app_type,
                     "db_type": "postgresql",
                     "entities": []
                 }
             }
         else:
+            # Context-aware questions for emergency continuation
+            context_question = "What are the main features you want this system to have?"
+            if "healthcare" in project_context.lower():
+                context_question = "What type of healthcare practice is this for?"
+            elif "stock" in project_context.lower():
+                context_question = "What types of financial instruments will users trade?"
+            elif "real estate" in project_context.lower():
+                context_question = "What types of properties will you list?"
+            elif "ecommerce" in project_context.lower():
+                context_question = "What product categories will you sell?"
+            
             return {
-                "next_question": "What are the main features you want this system to have?",
+                "next_question": context_question,
                 "done": False,
                 "partial_spec": {}
             }
@@ -623,12 +457,11 @@ class AIAgentService:
             control["done"] = True
             done = True
         
-        # If AI says it's done but doesn't have complete entities, generate them
+        # If AI says it's done but doesn't have complete entities, let the AI handle it
+        # Don't fall back to hard-coded entities - let the AI generate appropriate ones
         if done and (not merged.get("entities") or len(merged.get("entities", [])) == 0):
-            logger.info("Conversation marked as done but no entities found, generating basic entities")
-            basic_entities = self._generate_basic_entities_from_context(history, answer)
-            merged["entities"] = basic_entities
-            control["partial_spec"] = merged
+            logger.info("Conversation marked as done but no entities found - AI should generate appropriate entities")
+            # Don't override with hard-coded entities - trust the AI's business analysis
         
         # Ensure we have a valid database type if done
         if done and not merged.get("db_type"):
