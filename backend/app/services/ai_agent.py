@@ -338,14 +338,146 @@ class AIAgentService:
         if conversation_rounds >= 2:
             # Context-aware app type for emergency completion
             app_type = "Database application"
+            entities = []
+            
             if "healthcare" in project_context.lower() or "medical" in project_context.lower():
                 app_type = "Healthcare Management System"
+                entities = [
+                    {
+                        "name": "patients",
+                        "fields": [
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "name", "type": "string", "required": True},
+                            {"name": "email", "type": "string", "required": True},
+                            {"name": "phone", "type": "string", "required": False},
+                            {"name": "created_at", "type": "timestamp", "required": True}
+                        ]
+                    },
+                    {
+                        "name": "doctors",
+                        "fields": [
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "name", "type": "string", "required": True},
+                            {"name": "specialty", "type": "string", "required": True},
+                            {"name": "email", "type": "string", "required": True},
+                            {"name": "created_at", "type": "timestamp", "required": True}
+                        ]
+                    },
+                    {
+                        "name": "appointments",
+                        "fields": [
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "patient_id", "type": "uuid", "required": True},
+                            {"name": "doctor_id", "type": "uuid", "required": True},
+                            {"name": "appointment_date", "type": "timestamp", "required": True},
+                            {"name": "status", "type": "string", "required": True}
+                        ]
+                    }
+                ]
             elif "stock" in project_context.lower() or "trading" in project_context.lower():
                 app_type = "Stock Trading Platform"
+                entities = [
+                    {
+                        "name": "users",
+                        "fields": [
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "email", "type": "string", "required": True},
+                            {"name": "name", "type": "string", "required": True},
+                            {"name": "account_balance", "type": "decimal", "required": False},
+                            {"name": "created_at", "type": "timestamp", "required": True}
+                        ]
+                    },
+                    {
+                        "name": "stocks",
+                        "fields": [
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "symbol", "type": "string", "required": True},
+                            {"name": "company_name", "type": "string", "required": True},
+                            {"name": "current_price", "type": "decimal", "required": True},
+                            {"name": "last_updated", "type": "timestamp", "required": True}
+                        ]
+                    },
+                    {
+                        "name": "transactions",
+                        "fields": [
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "user_id", "type": "uuid", "required": True},
+                            {"name": "stock_id", "type": "uuid", "required": True},
+                            {"name": "transaction_type", "type": "string", "required": True},
+                            {"name": "quantity", "type": "integer", "required": True},
+                            {"name": "price", "type": "decimal", "required": True}
+                        ]
+                    }
+                ]
             elif "real estate" in project_context.lower() or "property" in project_context.lower():
                 app_type = "Real Estate Platform"
+                entities = [
+                    {
+                        "name": "users",
+                        "fields": [
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "email", "type": "string", "required": True},
+                            {"name": "name", "type": "string", "required": True},
+                            {"name": "phone", "type": "string", "required": False},
+                            {"name": "created_at", "type": "timestamp", "required": True}
+                        ]
+                    },
+                    {
+                        "name": "properties",
+                        "fields": [
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "title", "type": "string", "required": True},
+                            {"name": "description", "type": "text", "required": False},
+                            {"name": "price", "type": "decimal", "required": True},
+                            {"name": "address", "type": "string", "required": True},
+                            {"name": "owner_id", "type": "uuid", "required": True}
+                        ]
+                    },
+                    {
+                        "name": "favorites",
+                        "fields": [
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "user_id", "type": "uuid", "required": True},
+                            {"name": "property_id", "type": "uuid", "required": True},
+                            {"name": "created_at", "type": "timestamp", "required": True}
+                        ]
+                    }
+                ]
             elif "ecommerce" in project_context.lower() or "store" in project_context.lower():
                 app_type = "E-commerce Platform"
+                entities = [
+                    {
+                        "name": "users",
+                        "fields": [
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "email", "type": "string", "required": True},
+                            {"name": "name", "type": "string", "required": True},
+                            {"name": "phone", "type": "string", "required": False},
+                            {"name": "created_at", "type": "timestamp", "required": True}
+                        ]
+                    },
+                    {
+                        "name": "products",
+                        "fields": [
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "name", "type": "string", "required": True},
+                            {"name": "description", "type": "text", "required": False},
+                            {"name": "price", "type": "decimal", "required": True},
+                            {"name": "inventory_count", "type": "integer", "required": True},
+                            {"name": "created_at", "type": "timestamp", "required": True}
+                        ]
+                    },
+                    {
+                        "name": "orders",
+                        "fields": [
+                            {"name": "id", "type": "uuid", "required": True},
+                            {"name": "user_id", "type": "uuid", "required": True},
+                            {"name": "total_amount", "type": "decimal", "required": True},
+                            {"name": "status", "type": "string", "required": True},
+                            {"name": "order_date", "type": "timestamp", "required": True}
+                        ]
+                    }
+                ]
             
             return {
                 "next_question": "Perfect! I have enough information to create your database design.",
@@ -353,7 +485,7 @@ class AIAgentService:
                 "partial_spec": {
                     "app_type": app_type,
                     "db_type": "postgresql",
-                    "entities": []
+                    "entities": entities
                 }
             }
         else:
