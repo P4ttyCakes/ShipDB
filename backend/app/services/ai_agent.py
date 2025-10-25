@@ -62,13 +62,41 @@ class AIAgentService:
             "- Security, privacy, and data protection "
             "- Error handling and system monitoring "
             "\n\n"
-            "Ask ONLY high-level business questions like: "
-            "- 'What type of users will use this system?' "
-            "- 'What are the main features you want?' "
-            "- 'Do you need to track user accounts, orders, inventory, etc.?' "
-            "- 'What are the key data points you need to store?' "
-            "- 'What are your main business processes and workflows?' "
-            "- 'Do you need integration with external systems or APIs?' "
+            "INTELLIGENT QUESTIONING STRATEGY: "
+            "Analyze the project description FIRST, then ask SPECIFIC questions based on what you've learned: "
+            "\n"
+            "If project mentions 'stock trading' or 'investment': "
+            "- 'What types of financial instruments will users trade?' "
+            "- 'Do you need real-time market data integration?' "
+            "- 'What risk management features are required?' "
+            "\n"
+            "If project mentions 'real estate' or 'property': "
+            "- 'What property types will you list (residential, commercial, etc.)?' "
+            "- 'Do you need property valuation or appraisal features?' "
+            "- 'What are your target markets geographically?' "
+            "\n"
+            "If project mentions 'e-commerce' or 'store': "
+            "- 'What product categories will you sell?' "
+            "- 'Do you need inventory management and supplier tracking?' "
+            "- 'What payment and shipping methods will you support?' "
+            "\n"
+            "If project mentions 'healthcare' or 'medical': "
+            "- 'What type of healthcare practice is this for?' "
+            "- 'Do you need patient scheduling and appointment management?' "
+            "- 'What compliance requirements must you meet (HIPAA, etc.)?' "
+            "\n"
+            "If project mentions 'education' or 'learning': "
+            "- 'What type of educational content will you deliver?' "
+            "- 'Do you need student progress tracking and assessments?' "
+            "- 'Will this be for individual learners or institutions?' "
+            "\n"
+            "If project mentions 'social' or 'community': "
+            "- 'What type of social interactions will users have?' "
+            "- 'Do you need content moderation and user reporting?' "
+            "- 'What community features are most important?' "
+            "\n"
+            "ALWAYS infer as much as possible from the project description and ask SPECIFIC follow-up questions "
+            "that build on what you already know, rather than generic questions."
             "\n\n"
             "NEVER ask technical questions about: "
             "- Database constraints, indexes, foreign keys "
@@ -519,11 +547,34 @@ class AIAgentService:
         session_id = str(uuid4())
         # For Anthropic, we keep history empty and rely on system prompt
         history: List[Dict[str, str]] = []
-        kickoff = (
-            f"Project name: {name}. "
-            + (f"Description: {description}. " if description else "")
-            + "Based on this project description, I'll help you design the perfect database. Let me ask a few questions about your business needs to suggest the best database structure for you."
-        )
+        
+        # Create a more contextual kickoff based on the project description
+        kickoff = f"Project name: {name}. "
+        if description:
+            kickoff += f"Description: {description}. "
+            kickoff += "Based on this project description, I can see this is a "
+            
+            # Analyze the description to provide context
+            desc_lower = description.lower()
+            if any(word in desc_lower for word in ["stock", "trading", "investment", "portfolio", "shares"]):
+                kickoff += "financial/investment platform. "
+            elif any(word in desc_lower for word in ["property", "real estate", "rent", "apartment", "house"]):
+                kickoff += "real estate platform. "
+            elif any(word in desc_lower for word in ["ecommerce", "store", "shop", "product", "inventory"]):
+                kickoff += "e-commerce platform. "
+            elif any(word in desc_lower for word in ["healthcare", "medical", "patient", "clinic", "hospital"]):
+                kickoff += "healthcare system. "
+            elif any(word in desc_lower for word in ["education", "learning", "course", "student", "school"]):
+                kickoff += "educational platform. "
+            elif any(word in desc_lower for word in ["social", "community", "chat", "messaging", "network"]):
+                kickoff += "social/community platform. "
+            else:
+                kickoff += "business application. "
+                
+            kickoff += "Let me ask some specific questions to understand your exact requirements and design the perfect database structure."
+        else:
+            kickoff += "Let me ask some questions about your business needs to suggest the best database structure for you."
+        
         control = self._call_model(history, kickoff)
         with self._lock:
             self._sessions[session_id] = {
