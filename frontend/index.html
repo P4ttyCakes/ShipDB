@@ -328,12 +328,13 @@
         function showResults(artifacts) {
             const mainContent = document.getElementById('main-content');
             
-            // Extract spec information for display
-            const spec = artifacts.spec || {};
-            const appType = spec.app_type || 'Unknown Application';
-            const dbType = spec.db_type || 'Unknown Database';
-            const complexityLevel = spec.complexity_level || 'Unknown';
-            const entityCount = spec.entities ? spec.entities.length : 0;
+            // Store artifacts globally for deployment
+            window.currentArtifacts = artifacts;
+            
+            // Extract spec information for display (artifacts is the direct response)
+            const appType = 'Generated Application';
+            const dbType = 'Multi-Database';
+            const entityCount = artifacts.dynamodb_tables ? artifacts.dynamodb_tables.length : 0;
             
             mainContent.innerHTML = `
                 <div class="results-section">
@@ -346,65 +347,13 @@
                                 <strong>Application Type:</strong> ${appType}
                             </div>
                             <div class="spec-item">
-                                <strong>Database:</strong> ${dbType.toUpperCase()}
+                                <strong>Database:</strong> ${dbType}
                             </div>
                             <div class="spec-item">
-                                <strong>Complexity Level:</strong> ${complexityLevel}
-                            </div>
-                            <div class="spec-item">
-                                <strong>Entities:</strong> ${entityCount} tables/collections
+                                <strong>Tables Generated:</strong> ${entityCount} DynamoDB tables
                             </div>
                         </div>
                     </div>
-                    
-                    ${spec.hybrid_architecture ? `
-                    <div class="enterprise-features">
-                        <h3>🏗️ Enterprise Architecture</h3>
-                        <div class="feature-list">
-                            <div class="feature-item">Hybrid Architecture: ${spec.hybrid_architecture.join(', ')}</div>
-                        </div>
-                    </div>
-                    ` : ''}
-                    
-                    ${spec.caching_strategy ? `
-                    <div class="enterprise-features">
-                        <h3>⚡ Caching Strategy</h3>
-                        <div class="feature-list">
-                            <div class="feature-item">Redis caching patterns configured</div>
-                        </div>
-                    </div>
-                    ` : ''}
-                    
-                    ${spec.search_strategy ? `
-                    <div class="enterprise-features">
-                        <h3>🔍 Search Strategy</h3>
-                        <div class="feature-list">
-                            <div class="feature-item">Elasticsearch integration included</div>
-                        </div>
-                    </div>
-                    ` : ''}
-                    
-                    ${spec.monitoring ? `
-                    <div class="enterprise-features">
-                        <h3>📊 Monitoring & Analytics</h3>
-                        <div class="feature-list">
-                            <div class="feature-item">Performance metrics configured</div>
-                            <div class="feature-item">Business metrics tracking</div>
-                            <div class="feature-item">Alerting system included</div>
-                        </div>
-                    </div>
-                    ` : ''}
-                    
-                    ${spec.security ? `
-                    <div class="enterprise-features">
-                        <h3>🔒 Security & Compliance</h3>
-                        <div class="feature-list">
-                            <div class="feature-item">Encryption: ${spec.security.encryption ? 'Enabled' : 'Disabled'}</div>
-                            <div class="feature-item">Access Control: ${spec.security.access_control ? 'Configured' : 'Basic'}</div>
-                            ${spec.security.compliance ? `<div class="feature-item">Compliance: ${spec.security.compliance.join(', ')}</div>` : ''}
-                        </div>
-                    </div>
-                    ` : ''}
                     
                     <div class="schema-section">
                         <h3>📝 PostgreSQL SQL</h3>
@@ -445,29 +394,43 @@
         
         async function deployDatabase(dbType) {
             try {
-                const response = await fetch('http://localhost:8000/api/deploy/test-project', {
+                if (!window.currentArtifacts) {
+                    alert('No schema artifacts available. Please generate a schema first.');
+                    return;
+                }
+                
+                // Prepare deployment request based on database type
+                let deploymentRequest;
+                
+                if (dbType === 'dynamodb') {
+                    deploymentRequest = {
+                        project_id: `project_${Date.now()}`,
+                        database_type: 'dynamodb',
+                        database_name: 'shipdb_generated',
+                        schema_data: window.currentArtifacts.dynamodb_tables,
+                        region: 'us-east-1'
+                    };
+                } else {
+                    // For other database types, we'd need to implement their deployment
+                    alert(`${dbType} deployment is not yet implemented. Only DynamoDB is currently supported.`);
+                    return;
+                }
+                
+                const response = await fetch('http://localhost:8000/api/deploy/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        db_type: dbType,
-                        spec: artifacts.spec || {},
-                        aws: {
-                            region: 'us-east-1',
-                            instance_class: 'db.t3.micro',
-                            master_username: 'admin',
-                            master_password: 'password123'
-                        }
-                    })
+                    body: JSON.stringify(deploymentRequest)
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
                 }
                 
                 const result = await response.json();
-                alert(`✅ ${dbType.toUpperCase()} deployment initiated!\n\nStatus: ${result.status}\nConnection: ${JSON.stringify(result.connection, null, 2)}`);
+                alert(`✅ ${dbType.toUpperCase()} deployment successful!\n\nDeployment ID: ${result.deployment_id}\nStatus: ${result.status}\nTables: ${result.connection_info.tables.join(', ')}`);
             } catch (error) {
                 alert(`❌ Deployment failed: ${error.message}`);
             }

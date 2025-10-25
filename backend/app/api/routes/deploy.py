@@ -1,35 +1,44 @@
-from fastapi import APIRouter, HTTPException, Body
-from typing import Any, Dict, Optional
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException
+from app.models.deployment import DeploymentRequest, DeploymentResponse
+from app.services.deployment.factory import DeploymentFactory
+from app.core.config import settings
 from loguru import logger
-
-from app.services.deployment.manager import deploy as deploy_manager
+import os
 
 router = APIRouter()
 
-
-class DeployRequest(BaseModel):
-    db_type: str
-    aws: Optional[Dict[str, Any]] = None
-    artifacts: Optional[Dict[str, Any]] = None
-    spec: Optional[Dict[str, Any]] = None
-
-
-@router.post("/{project_id}")
-async def deploy_project(project_id: str, payload: DeployRequest = Body(...)):
-    """Deploy database resources to AWS for the given project.
-
-    Supports DynamoDB now; PostgreSQL and MongoDB are stubs.
-    """
+@router.post("/", response_model=DeploymentResponse)
+async def deploy_database(request: DeploymentRequest):
+    """Deploy database to AWS cloud"""
     try:
-        if not payload.db_type:
-            raise HTTPException(status_code=422, detail="db_type is required")
-        result = deploy_manager(payload.db_type, payload.model_dump())
-        return {"project_id": project_id, **result}
-    except HTTPException:
-        raise
-    except NotImplementedError as nie:
-        raise HTTPException(status_code=501, detail=str(nie))
+        # Use AWS credentials from settings
+        os.environ['AWS_ACCESS_KEY_ID'] = settings.AWS_ACCESS_KEY_ID or 'your_aws_access_key'
+        os.environ['AWS_SECRET_ACCESS_KEY'] = settings.AWS_SECRET_ACCESS_KEY or 'your_aws_secret_key'
+        os.environ['AWS_REGION'] = request.region or settings.AWS_REGION
+        
+        # Get appropriate deployment service
+        service = DeploymentFactory.get_service(request.database_type)
+        
+        # Validate credentials
+        if not await service.validate_credentials():
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid cloud provider credentials"
+            )
+        
+        # Execute deployment
+        logger.info(f"Starting deployment for project {request.project_id}")
+        result = await service.deploy(request)
+        
+        logger.success(f"Deployment completed: {result.deployment_id}")
+        return result
+        
     except Exception as e:
-        logger.exception("Deployment failed")
+        logger.error(f"Deployment failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/status/{deployment_id}")
+async def get_deployment_status(deployment_id: str):
+    """Check deployment status"""
+    # Simple status check for hackathon
+    return {"deployment_id": deployment_id, "status": "running"}
