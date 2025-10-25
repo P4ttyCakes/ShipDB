@@ -3,62 +3,159 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ShipDB Debug</title>
+    <title>ShipDB Debug Test</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        .test { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        button { padding: 10px 15px; margin: 5px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; height: 200px; overflow-y: scroll; }
+        input { width: 300px; padding: 5px; }
     </style>
 </head>
 <body>
-    <h1>ShipDB Debug Page</h1>
+    <h1>🔍 ShipDB Debug Test</h1>
     
-    <div class="test">
-        <h3>Test 1: Basic HTML</h3>
-        <p>If you can see this, the server is working.</p>
+    <div class="test-section">
+        <h3>1. Test Backend Health</h3>
+        <button onclick="testHealth()">Test Health</button>
+        <div id="health-result"></div>
     </div>
     
-    <div class="test">
-        <h3>Test 2: JavaScript</h3>
-        <p id="js-test">JavaScript not working</p>
-        <script>
-            document.getElementById('js-test').textContent = 'JavaScript is working!';
-        </script>
+    <div class="test-section">
+        <h3>2. Start New Project</h3>
+        <input type="text" id="project-name" placeholder="Project Name" value="Debug Test">
+        <input type="text" id="project-desc" placeholder="Description" value="Testing the API">
+        <button onclick="startProject()">Start Project</button>
+        <div id="start-result"></div>
     </div>
     
-    <div class="test">
-        <h3>Test 3: Main.js Loading</h3>
-        <p id="main-test">Main.js not loaded</p>
-        <script>
+    <div class="test-section">
+        <h3>3. Send Answer</h3>
+        <input type="text" id="answer-input" placeholder="Your answer" value="This is a test answer">
+        <button onclick="sendAnswer()">Send Answer</button>
+        <div id="answer-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>4. Debug Log</h3>
+        <div id="debug-log" class="log"></div>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+        
+        function log(message) {
+            const logDiv = document.getElementById('debug-log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('debug-log').innerHTML = '';
+        }
+        
+        async function testHealth() {
             try {
-                // Test if our main.js loads
-                const script = document.createElement('script');
-                script.src = 'src/main.js';
-                script.onload = function() {
-                    document.getElementById('main-test').textContent = 'Main.js loaded successfully!';
-                };
-                script.onerror = function() {
-                    document.getElementById('main-test').textContent = 'Main.js failed to load!';
-                };
-                document.head.appendChild(script);
+                log('Testing backend health...');
+                const response = await fetch('http://localhost:8000/health');
+                const result = await response.json();
+                document.getElementById('health-result').innerHTML = 
+                    `<strong>Status:</strong> ${result.status} (${response.status})`;
+                log(`Health check: ${response.status} - ${JSON.stringify(result)}`);
             } catch (error) {
-                document.getElementById('main-test').textContent = 'Error loading main.js: ' + error.message;
+                document.getElementById('health-result').innerHTML = 
+                    `<strong>Error:</strong> ${error.message}`;
+                log(`Health check error: ${error.message}`);
             }
-        </script>
-    </div>
-    
-    <div class="test">
-        <h3>Test 4: API Connection</h3>
-        <p id="api-test">Testing API...</p>
-        <script>
-            fetch('http://localhost:8000/health')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('api-test').textContent = 'API connected: ' + JSON.stringify(data);
-                })
-                .catch(error => {
-                    document.getElementById('api-test').textContent = 'API error: ' + error.message;
+        }
+        
+        async function startProject() {
+            try {
+                const name = document.getElementById('project-name').value;
+                const desc = document.getElementById('project-desc').value;
+                
+                log(`Starting project: ${name} - ${desc}`);
+                
+                const response = await fetch('http://localhost:8000/api/projects/new_project/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name, description: desc })
                 });
-        </script>
-    </div>
+                
+                log(`Start response status: ${response.status}`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const result = await response.json();
+                currentSessionId = result.session_id;
+                
+                document.getElementById('start-result').innerHTML = 
+                    `<strong>Session ID:</strong> ${currentSessionId}<br>
+                     <strong>AI Question:</strong> ${result.prompt}`;
+                log(`Project started successfully: ${JSON.stringify(result)}`);
+                
+            } catch (error) {
+                document.getElementById('start-result').innerHTML = 
+                    `<strong>Error:</strong> ${error.message}`;
+                log(`Start project error: ${error.message}`);
+            }
+        }
+        
+        async function sendAnswer() {
+            try {
+                if (!currentSessionId) {
+                    alert('Please start a project first');
+                    return;
+                }
+                
+                const answer = document.getElementById('answer-input').value;
+                log(`Sending answer: ${answer}`);
+                
+                const response = await fetch('http://localhost:8000/api/projects/new_project/next', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_id: currentSessionId,
+                        answer: answer
+                    })
+                });
+                
+                log(`Answer response status: ${response.status}`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const result = await response.json();
+                
+                document.getElementById('answer-result').innerHTML = 
+                    `<strong>AI Response:</strong> ${result.prompt}<br>
+                     <strong>Done:</strong> ${result.done}<br>
+                     <strong>Spec Keys:</strong> ${Object.keys(result.partial_spec || {}).join(', ')}`;
+                log(`Answer sent successfully: ${JSON.stringify(result)}`);
+                
+            } catch (error) {
+                document.getElementById('answer-result').innerHTML = 
+                    `<strong>Error:</strong> ${error.message}`;
+                log(`Send answer error: ${error.message}`);
+            }
+        }
+        
+        // Auto-test on load
+        window.onload = function() {
+            log('Page loaded - ready for testing');
+            testHealth();
+        };
+    </script>
 </body>
 </html>

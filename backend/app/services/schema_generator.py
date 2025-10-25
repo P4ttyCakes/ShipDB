@@ -3,16 +3,34 @@ from loguru import logger
 
 BASIC_TYPE_MAP_PG = {
     "string": "TEXT",
+    "text": "TEXT",
+    "varchar": "VARCHAR",
     "int": "INTEGER",
     "integer": "INTEGER",
+    "bigint": "BIGINT",
+    "smallint": "SMALLINT",
     "float": "DOUBLE PRECISION",
+    "double": "DOUBLE PRECISION",
     "number": "DOUBLE PRECISION",
+    "decimal": "DECIMAL",
+    "numeric": "NUMERIC",
     "bool": "BOOLEAN",
     "boolean": "BOOLEAN",
     "date": "DATE",
     "datetime": "TIMESTAMP",
+    "timestamp": "TIMESTAMP",
+    "time": "TIME",
     "json": "JSONB",
+    "jsonb": "JSONB",
     "uuid": "UUID",
+    "inet": "INET",
+    "cidr": "CIDR",
+    "macaddr": "MACADDR",
+    "point": "POINT",
+    "polygon": "POLYGON",
+    "bytea": "BYTEA",
+    "array": "TEXT[]",
+    "enum": "TEXT",
 }
 
 
@@ -119,25 +137,103 @@ def to_mongo_scripts(spec: Dict[str, Any]) -> List[str]:
 
 def to_postgres_sql(spec: Dict[str, Any]) -> str:
     stmts: List[str] = []
+    
+    # Create custom types/enums first
+    for ent in spec.get("entities", []):
+        for f in ent.get("fields", []):
+            if f.get("type") == "enum" and f.get("values"):
+                enum_name = f"{ent['name']}_{f['name']}_enum"
+                values = ", ".join([f"'{v}'" for v in f["values"]])
+                stmts.append(f"CREATE TYPE IF NOT EXISTS {enum_name} AS ENUM ({values});")
+    
+    # Create tables
     for ent in spec.get("entities", []):
         cols: List[str] = []
         pks: List[str] = []
         uniques: List[str] = []
         fks: List[str] = []
+        checks: List[str] = []
+        
         for f in ent.get("fields", []):
             col = f['name']
-            pg_type = BASIC_TYPE_MAP_PG.get(_normalize_type(f.get('type')), 'TEXT')
+            field_type = _normalize_type(f.get('type'))
+            
+            # Handle enum types
+            if field_type == "enum" and f.get("values"):
+                pg_type = f"{ent['name']}_{f['name']}_enum"
+            else:
+                pg_type = BASIC_TYPE_MAP_PG.get(field_type, 'TEXT')
+            
+            # Handle precision and scale for decimal/numeric
+            if field_type in ["decimal", "numeric"] and f.get("precision"):
+                scale = f.get("scale", 0)
+                pg_type = f"{pg_type}({f['precision']},{scale})"
+            elif field_type == "varchar" and f.get("length"):
+                pg_type = f"VARCHAR({f['length']})"
+            
             nullable = "NOT NULL" if f.get("required") else ""
             default = f.get("default")
-            default_sql = f" DEFAULT {default}" if default is not None else ""
-            cols.append(f"\"{col}\" {pg_type} {nullable}{default_sql}".strip())
-        # Constraints
-        pk = ent.get("primary_key") or []
-        if isinstance(pk, list) and pk:
-            pks = [f'"{c}"' for c in pk]
+            
+            # Handle default values properly
+            if default is not None:
+                if isinstance(default, str) and field_type not in ["enum"]:
+                    default_sql = f" DEFAULT '{default}'"
+                else:
+                    default_sql = f" DEFAULT {default}"
+            else:
+                default_sql = ""
+            
+            # Handle auto-increment
+            if f.get("auto_increment"):
+                if field_type in ["int", "integer"]:
+                    pg_type = "SERIAL"
+                elif field_type == "bigint":
+                    pg_type = "BIGSERIAL"
+                nullable = "NOT NULL"
+                default_sql = ""
+            
+            col_def = f"\"{col}\" {pg_type} {nullable}{default_sql}".strip()
+            cols.append(col_def)
+            
+            # Collect primary keys
+            if f.get("primary_key"):
+                pks.append(f'"{col}"')
+            
+            # Collect unique constraints
+            if f.get("unique") and not f.get("primary_key"):
+                uniques.append(f"UNIQUE (\"{col}\")")
+            
+            # Collect foreign keys
+            if f.get("foreign_key"):
+                fk_info = f["foreign_key"]
+                ref_table = fk_info.get("table")
+                ref_field = fk_info.get("field")
+                if ref_table and ref_field:
+                    fks.append(f"FOREIGN KEY (\"{col}\") REFERENCES \"{ref_table}\"(\"{ref_field}\")")
+            
+            # Collect check constraints
+            if f.get("min_value") is not None:
+                checks.append(f"CHECK (\"{col}\" >= {f['min_value']})")
+            if f.get("max_value") is not None:
+                checks.append(f"CHECK (\"{col}\" <= {f['max_value']})")
+            if f.get("min_length") is not None:
+                checks.append(f"CHECK (LENGTH(\"{col}\") >= {f['min_length']})")
+            if f.get("max_length") is not None:
+                checks.append(f"CHECK (LENGTH(\"{col}\") <= {f['max_length']})")
+        
+        # Handle composite primary keys
+        if not pks:
+            # Look for primary_key at entity level
+            pk_fields = ent.get("primary_key", [])
+            if isinstance(pk_fields, list):
+                pks = [f'"{c}"' for c in pk_fields]
+        
+        # Handle composite unique constraints
         for uq in ent.get("unique", []) or []:
             if isinstance(uq, list) and uq:
                 uniques.append(f"UNIQUE ({', '.join([f'\"{c}\"' for c in uq])})")
+        
+        # Handle foreign keys at entity level
         for fk in ent.get("foreign_keys", []) or []:
             cols_local = fk.get("columns") or []
             ref_table = fk.get("ref_table")
@@ -147,21 +243,69 @@ def to_postgres_sql(spec: Dict[str, Any]) -> str:
                     "FOREIGN KEY (" + ", ".join([f'\"{c}\"' for c in cols_local]) + ") REFERENCES "
                     + f'"{ref_table}"(' + ", ".join([f'\"{c}\"' for c in ref_cols]) + ")"
                 )
+        
         table = ent["name"]
         body = [*cols]
+        
         if pks:
             body.append(f"PRIMARY KEY ({', '.join(pks)})")
         body.extend(uniques)
         body.extend(fks)
+        body.extend(checks)
+        
         stmts.append(f"CREATE TABLE IF NOT EXISTS \"{table}\" (\n  " + ",\n  ".join(body) + "\n);")
-        # Indexes
+        
+        # Create indexes
         for i, idx in enumerate(ent.get("indexes", []) or []):
             fields = idx.get("fields") or []
             if not fields:
                 continue
+            
+            idx_name = idx.get("name") or f"{table}_idx_{i}"
             cols_idx = ", ".join([f'"{f.get("field")}" {("DESC" if f.get("order")=="desc" else "ASC")}' for f in fields])
             unique_kw = "UNIQUE " if idx.get("unique") else ""
-            stmts.append(f"CREATE {unique_kw}INDEX IF NOT EXISTS \"{table}_idx_{i}\" ON \"{table}\" ({cols_idx});")
+            index_type = idx.get("type", "btree")
+            
+            if index_type == "gin":
+                stmts.append(f"CREATE {unique_kw}INDEX IF NOT EXISTS \"{idx_name}\" ON \"{table}\" USING GIN ({cols_idx});")
+            elif index_type == "gist":
+                stmts.append(f"CREATE {unique_kw}INDEX IF NOT EXISTS \"{idx_name}\" ON \"{table}\" USING GIST ({cols_idx});")
+            elif index_type == "hash":
+                stmts.append(f"CREATE {unique_kw}INDEX IF NOT EXISTS \"{idx_name}\" ON \"{table}\" USING HASH ({cols_idx});")
+            else:
+                stmts.append(f"CREATE {unique_kw}INDEX IF NOT EXISTS \"{idx_name}\" ON \"{table}\" ({cols_idx});")
+    
+    # Add triggers for audit trails if specified
+    if spec.get("audit_trail"):
+        for ent in spec.get("entities", []):
+            table = ent["name"]
+            stmts.append(f"""
+-- Audit trigger for {table}
+CREATE OR REPLACE FUNCTION audit_{table}_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        INSERT INTO audit_logs (table_name, record_id, action, old_values, created_at)
+        VALUES ('{table}', OLD.id, 'delete', row_to_json(OLD), NOW());
+        RETURN OLD;
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO audit_logs (table_name, record_id, action, old_values, new_values, created_at)
+        VALUES ('{table}', NEW.id, 'update', row_to_json(OLD), row_to_json(NEW), NOW());
+        RETURN NEW;
+    ELSIF TG_OP = 'INSERT' THEN
+        INSERT INTO audit_logs (table_name, record_id, action, new_values, created_at)
+        VALUES ('{table}', NEW.id, 'insert', row_to_json(NEW), NOW());
+        RETURN NEW;
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER {table}_audit_trigger
+    AFTER INSERT OR UPDATE OR DELETE ON "{table}"
+    FOR EACH ROW EXECUTE FUNCTION audit_{table}_changes();
+""")
+    
     return "\n".join(stmts)
 
 
@@ -241,9 +385,34 @@ def generate_all(spec: Dict[str, Any]) -> Dict[str, Any]:
     ok, errors = validate_spec(spec)
     if not ok:
         raise ValueError("Invalid spec: " + "; ".join(errors))
-    return {
+    
+    result = {
         "json_schema": to_json_schema(spec),
         "mongo_scripts": to_mongo_scripts(spec),
         "postgres_sql": to_postgres_sql(spec),
         "dynamodb_tables": to_dynamodb_defs(spec),
     }
+    
+    # Add enterprise features if present
+    if "hybrid_architecture" in spec:
+        result["hybrid_architecture"] = spec["hybrid_architecture"]
+    
+    if "caching_strategy" in spec:
+        result["caching_strategy"] = spec["caching_strategy"]
+    
+    if "search_strategy" in spec:
+        result["search_strategy"] = spec["search_strategy"]
+    
+    if "monitoring" in spec:
+        result["monitoring"] = spec["monitoring"]
+    
+    if "backup_strategy" in spec:
+        result["backup_strategy"] = spec["backup_strategy"]
+    
+    if "scaling_strategy" in spec:
+        result["scaling_strategy"] = spec["scaling_strategy"]
+    
+    if "security" in spec:
+        result["security"] = spec["security"]
+    
+    return result

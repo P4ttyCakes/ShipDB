@@ -28,9 +28,11 @@
                         <h2>Welcome to ShipDB</h2>
                         <p>Create and deploy databases without any technical knowledge! Our AI will design the perfect database structure based on your business needs.</p>
                         <div class="features">
-                            <div class="feature">🤖 AI-powered design suggestions</div>
-                            <div class="feature">📊 No technical knowledge required</div>
-                            <div class="feature">⚡ Deploy in minutes</div>
+                            <div class="feature">🤖 AI-powered design for ANY business sector</div>
+                            <div class="feature">🏥 Healthcare, Finance, Manufacturing, SaaS, Government</div>
+                            <div class="feature">📊 Detailed, fool-proof, production-ready databases</div>
+                            <div class="feature">🔒 Built-in security, compliance, and monitoring</div>
+                            <div class="feature">⚡ Deploy PostgreSQL, MongoDB, DynamoDB in minutes</div>
                         </div>
                         <button id="start-btn" class="btn btn-primary">Start New Project</button>
                     </div>
@@ -127,6 +129,7 @@
                         <button id="send-answer" class="btn btn-primary">Send</button>
                     </div>
                     <button id="finish-conversation" class="btn btn-secondary" style="display: none;">Finish & Generate Schema</button>
+                    <button id="generate-schema" class="btn btn-primary" style="display: none;">Generate Schema Now</button>
                 </div>
             `;
             
@@ -143,6 +146,9 @@
             });
             finishBtn.addEventListener('click', () => finishConversation(sessionId));
             
+            const generateBtn = document.getElementById('generate-schema');
+            generateBtn.addEventListener('click', () => generateSchemaDirectly());
+            
             userInput.focus();
         }
         
@@ -152,12 +158,25 @@
             
             if (!answer) return;
             
+            if (!sessionId) {
+                alert('Session expired. Please refresh the page and start a new project.');
+                return;
+            }
+            
             // Add user message to log
             const log = document.getElementById('conversation-log');
             log.innerHTML += `<div class="user-message">👤 ${answer}</div>`;
+            log.innerHTML += `<div class="ai-message">🤖 Thinking...</div>`;
             input.value = '';
             
+            // Disable input while processing
+            input.disabled = true;
+            document.getElementById('send-answer').disabled = true;
+            
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                
                 const response = await fetch('http://localhost:8000/api/projects/new_project/next', {
                     method: 'POST',
                     headers: {
@@ -166,28 +185,60 @@
                     body: JSON.stringify({
                         session_id: sessionId,
                         answer: answer
-                    })
+                    }),
+                    signal: controller.signal
                 });
                 
+                clearTimeout(timeoutId);
+                
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorText = await response.text();
+                    console.error('API Error:', errorText);
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
                 }
                 
                 const result = await response.json();
                 
-                // Add AI response to log
-                log.innerHTML += `<div class="ai-message">🤖 ${result.prompt}</div>`;
+                // Replace "Thinking..." with actual response
+                const messages = log.querySelectorAll('.ai-message');
+                const lastMessage = messages[messages.length - 1];
+                lastMessage.textContent = `🤖 ${result.prompt}`;
                 
                 if (result.done) {
                     document.getElementById('finish-conversation').style.display = 'block';
+                    document.getElementById('generate-schema').style.display = 'block';
                     document.getElementById('user-input').disabled = true;
                     document.getElementById('send-answer').disabled = true;
+                    
+                    // Store the spec for schema generation
+                    window.currentSpec = result.partial_spec;
+                } else {
+                    // Re-enable input for next question
+                    input.disabled = false;
+                    document.getElementById('send-answer').disabled = false;
                 }
                 
                 // Scroll to bottom
                 log.scrollTop = log.scrollHeight;
             } catch (error) {
-                alert(`Error sending answer: ${error.message}`);
+                console.error('Error details:', error);
+                
+                // Remove "Thinking..." message on error
+                const messages = log.querySelectorAll('.ai-message');
+                const lastMessage = messages[messages.length - 1];
+                if (lastMessage && lastMessage.textContent.includes('Thinking...')) {
+                    lastMessage.remove();
+                }
+                
+                // Re-enable input
+                input.disabled = false;
+                document.getElementById('send-answer').disabled = false;
+                
+                if (error.name === 'AbortError') {
+                    alert('Request timed out. The AI is taking too long to respond. Please try again.');
+                } else {
+                    alert(`Error sending answer: ${error.message}\n\nPlease try refreshing the page and starting a new project.`);
+                }
             }
         }
         
@@ -237,11 +288,124 @@
             }
         }
         
+        async function generateSchemaDirectly() {
+            if (!window.currentSpec) {
+                alert('No database specification available. Please complete the conversation first.');
+                return;
+            }
+            
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                
+                const response = await fetch('http://localhost:8000/api/schema/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(window.currentSpec),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+                }
+                
+                const artifacts = await response.json();
+                showResults(artifacts);
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    alert('Schema generation timed out. Please try again.');
+                } else {
+                    alert(`Error generating schema: ${error.message}`);
+                }
+            }
+        }
+        
         function showResults(artifacts) {
             const mainContent = document.getElementById('main-content');
+            
+            // Extract spec information for display
+            const spec = artifacts.spec || {};
+            const appType = spec.app_type || 'Unknown Application';
+            const dbType = spec.db_type || 'Unknown Database';
+            const complexityLevel = spec.complexity_level || 'Unknown';
+            const entityCount = spec.entities ? spec.entities.length : 0;
+            
             mainContent.innerHTML = `
                 <div class="results-section">
-                    <h2>Generated Schema</h2>
+                    <h2>🎉 Generated Database Architecture</h2>
+                    
+                    <div class="spec-summary">
+                        <h3>📋 Project Summary</h3>
+                        <div class="spec-grid">
+                            <div class="spec-item">
+                                <strong>Application Type:</strong> ${appType}
+                            </div>
+                            <div class="spec-item">
+                                <strong>Database:</strong> ${dbType.toUpperCase()}
+                            </div>
+                            <div class="spec-item">
+                                <strong>Complexity Level:</strong> ${complexityLevel}
+                            </div>
+                            <div class="spec-item">
+                                <strong>Entities:</strong> ${entityCount} tables/collections
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${spec.hybrid_architecture ? `
+                    <div class="enterprise-features">
+                        <h3>🏗️ Enterprise Architecture</h3>
+                        <div class="feature-list">
+                            <div class="feature-item">Hybrid Architecture: ${spec.hybrid_architecture.join(', ')}</div>
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    ${spec.caching_strategy ? `
+                    <div class="enterprise-features">
+                        <h3>⚡ Caching Strategy</h3>
+                        <div class="feature-list">
+                            <div class="feature-item">Redis caching patterns configured</div>
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    ${spec.search_strategy ? `
+                    <div class="enterprise-features">
+                        <h3>🔍 Search Strategy</h3>
+                        <div class="feature-list">
+                            <div class="feature-item">Elasticsearch integration included</div>
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    ${spec.monitoring ? `
+                    <div class="enterprise-features">
+                        <h3>📊 Monitoring & Analytics</h3>
+                        <div class="feature-list">
+                            <div class="feature-item">Performance metrics configured</div>
+                            <div class="feature-item">Business metrics tracking</div>
+                            <div class="feature-item">Alerting system included</div>
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    ${spec.security ? `
+                    <div class="enterprise-features">
+                        <h3>🔒 Security & Compliance</h3>
+                        <div class="feature-list">
+                            <div class="feature-item">Encryption: ${spec.security.encryption ? 'Enabled' : 'Disabled'}</div>
+                            <div class="feature-item">Access Control: ${spec.security.access_control ? 'Configured' : 'Basic'}</div>
+                            ${spec.security.compliance ? `<div class="feature-item">Compliance: ${spec.security.compliance.join(', ')}</div>` : ''}
+                        </div>
+                    </div>
+                    ` : ''}
+                    
                     <div class="schema-section">
                         <h3>📝 PostgreSQL SQL</h3>
                         <pre><code>${artifacts.postgres_sql || 'No SQL generated'}</code></pre>
@@ -262,11 +426,51 @@
                         <pre><code>${JSON.stringify(artifacts.dynamodb_tables, null, 2)}</code></pre>
                     </div>
                     
+                    <div class="deployment-section">
+                        <h3>🚀 Ready to Deploy</h3>
+                        <p>Your database is ready for deployment to AWS! Choose your preferred database type:</p>
+                        <div class="deployment-options">
+                            <button onclick="deployDatabase('postgresql')" class="btn btn-primary">Deploy PostgreSQL</button>
+                            <button onclick="deployDatabase('mongodb')" class="btn btn-primary">Deploy MongoDB</button>
+                            <button onclick="deployDatabase('dynamodb')" class="btn btn-primary">Deploy DynamoDB</button>
+                        </div>
+                    </div>
+                    
                     <div class="actions">
-                        <button onclick="location.reload()" class="btn btn-primary">Start New Project</button>
+                        <button onclick="location.reload()" class="btn btn-secondary">Start New Project</button>
                     </div>
                 </div>
             `;
+        }
+        
+        async function deployDatabase(dbType) {
+            try {
+                const response = await fetch('http://localhost:8000/api/deploy/test-project', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        db_type: dbType,
+                        spec: artifacts.spec || {},
+                        aws: {
+                            region: 'us-east-1',
+                            instance_class: 'db.t3.micro',
+                            master_username: 'admin',
+                            master_password: 'password123'
+                        }
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                alert(`✅ ${dbType.toUpperCase()} deployment initiated!\n\nStatus: ${result.status}\nConnection: ${JSON.stringify(result.connection, null, 2)}`);
+            } catch (error) {
+                alert(`❌ Deployment failed: ${error.message}`);
+            }
         }
         
         // Initialize the app
