@@ -2,38 +2,34 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from app.core.config import settings
-from app.api.routes import projects, schema, deploy, visualization
+from app.api.routes import deploy
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="ShipDB API",
-    description="Instant Cloud Database Deployment",
-    version="0.1.0"
+    title="Supabase Deployment API",
+    description="Deploy PostgreSQL schemas to Supabase with automatic RLS",
+    version="1.0.0"
 )
 
-# CORS middleware for frontend
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-app.include_router(schema.router, prefix="/api/schema", tags=["schema"])
-app.include_router(deploy.router, prefix="/api/deploy", tags=["deploy"])
-app.include_router(visualization.router, prefix="/api/visualization", tags=["visualization"])
+# Include deployment router
+app.include_router(deploy.router, prefix="/api", tags=["deploy"])
 
 
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {
-        "message": "ShipDB API",
-        "version": "0.1.0",
+        "message": "Supabase Deployment API",
+        "version": "1.0.0",
         "status": "running"
     }
 

@@ -93,7 +93,65 @@ class ClaudeSupabaseDriver:
                     "schema": table_schema
                 }
             
-            # Method 2: Try psql command line tool
+            # Method 2: Try exec_sql RPC function via Supabase REST API
+            try:
+                # First, extract all CREATE TABLE statements to track what tables will be created
+                # Split on semicolons followed by whitespace/newline
+                statements = re.split(r';\s*\n', table_schema)
+                # Also handle semicolons not on newlines
+                all_statements = []
+                for stmt in statements:
+                    all_statements.extend(re.split(r';(?!\n)', stmt))
+                
+                executed_tables = []
+                for statement in all_statements:
+                    statement = statement.strip()
+                    if statement and statement.upper().startswith('CREATE TABLE'):
+                        match = re.search(r'CREATE TABLE(?: IF NOT EXISTS)?\s+"?(\w+)"?', statement, re.IGNORECASE)
+                        if match:
+                            executed_tables.append(match.group(1))
+                
+                # Call the exec_sql RPC function with the complete schema
+                # exec_sql can handle multiple statements separated by semicolons
+                result = self.supabase.rpc('exec_sql', {'query': table_schema}).execute()
+                
+                # Enable RLS on all created tables
+                if executed_tables:
+                    try:
+                        rls_sql = """
+DO $$
+DECLARE
+    table_record RECORD;
+BEGIN
+    FOR table_record IN
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_type = 'BASE TABLE'
+    LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', table_record.table_name);
+    END LOOP;
+END $$;
+"""
+                        rls_result = self.supabase.rpc('exec_sql', {'query': rls_sql}).execute()
+                        logger.info(f"RLS enabled on tables")
+                    except Exception as rls_error:
+                        logger.warning(f"Failed to enable RLS: {rls_error}")
+                
+                logger.info(f"Successfully executed SQL via exec_sql RPC function")
+                return {
+                    "success": True,
+                    "message": f"Tables created via exec_sql RPC: {', '.join(executed_tables)}",
+                    "tables_created": executed_tables,
+                    "schema": table_schema,
+                    "method": "exec_sql_rpc",
+                    "rls_enabled": True
+                }
+                    
+            except Exception as rpc_error:
+                logger.warning(f"exec_sql RPC failed: {rpc_error}, falling back to psql")
+                
+            # Method 3: Try psql command line tool
             try:
                 db_url = os.getenv('SUPABASE_DB_URL')
                 if db_url:
@@ -131,7 +189,7 @@ class ClaudeSupabaseDriver:
                     raise Exception("SUPABASE_DB_URL not set")
                     
             except Exception as psql_error:
-                # Method 3: Schema Inference - Create tables by inserting sample data
+                # Method 4: Schema Inference - Create tables by inserting sample data
                 try:
                     # Parse the schema to extract table definitions
                     statements = [s.strip() for s in re.split(r';(?!\s*[A-Z])', table_schema) if s.strip()]

@@ -1,147 +1,112 @@
-# 🚀 ShipDB - Instant Cloud Database Deployment
+# Supabase PostgreSQL Deployment Service
 
-**ShipDB** is a hackathon MVP that rapidly generates and deploys cloud databases (MongoDB, PostgreSQL, DynamoDB) without manual schema definition or infrastructure management.
+A simple API service to deploy PostgreSQL DDL files to Supabase with automatic Row Level Security (RLS) enablement.
 
-## 🏗️ **Project Structure**
+## Features
 
-```
-ShipDB/
-├── backend/                    # FastAPI backend
-│   ├── app/
-│   │   ├── api/               # API routes
-│   │   ├── core/              # Configuration
-│   │   ├── models/            # Data models
-│   │   ├── services/          # Deployment services
-│   │   └── utils/             # Utilities
-│   ├── requirements.txt       # Python dependencies
-│   └── .env                   # Environment variables
-├── frontend/                  # Frontend application
-│   └── src/
-├── scripts/                   # Demo and test scripts
-│   ├── demos/                 # Database demos
-│   ├── tests/                 # Test scripts
-│   └── run_demos.py          # Demo runner
-├── docs/                      # Documentation
-└── examples/                  # Usage examples
-```
+- ✅ Deploy PostgreSQL schemas to Supabase via REST API
+- ✅ Automatic RLS enablement on all tables
+- ✅ Multi-table support in single deployment
+- ✅ No direct database connection required
 
-## 🚀 **Quick Start**
+## Quick Start
 
-### **1. Setup Environment**
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
+### 1. Prerequisites
 
-### **2. Configure AWS Credentials**
-Create `.env` file in `backend/`:
+Set up your `.env` file in the `backend/` directory:
+
 ```env
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-AWS_REGION=us-east-1
-OPENAI_API_KEY=your_openai_key
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-service-key
 ```
 
-### **3. Run Demos**
-```bash
-# From project root
-python scripts/run_demos.py
+### 2. Create exec_sql Function in Supabase
+
+Run this SQL in your Supabase Dashboard → SQL Editor:
+
+```sql
+CREATE OR REPLACE FUNCTION exec_sql(query text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  EXECUTE query;
+EXCEPTION WHEN OTHERS THEN
+  RAISE EXCEPTION 'SQL execution failed: %', SQLERRM;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION exec_sql(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION exec_sql(text) TO anon;
 ```
 
-### **4. Start API Server**
+### 3. Start the Service
+
 ```bash
-cd backend
-source .venv/bin/activate
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+./start_backend.sh
 ```
 
-## 📊 **Available Demos**
+The API will be available at `http://localhost:8000`
 
-### **Database Generators**
-- **E-commerce Database** - Complete online store (12 tables)
-- **Social Media Platform** - Full social network (12 tables)
-- **AWS Infrastructure Demo** - Show system capabilities
+## Usage
 
-### **Sample Data**
-- **E-commerce Sample Data** - Add realistic test data
-- **Project Connection Test** - Verify project organization
+### Deploy PostgreSQL Schema
 
-## 🎯 **Current Projects**
-
-### **🛒 E-commerce Store**
-- **Project ID**: `ecommerce_20241025_020803`
-- **Database**: `ecommerce_store`
-- **Tables**: 12 (users, products, orders, etc.)
-- **Status**: ✅ Active with sample data
-
-### **📱 Social Media Platform**
-- **Project ID**: `social_media_20251025_023915`
-- **Database**: `social_platform`
-- **Tables**: 12 (users, posts, comments, etc.)
-- **Status**: ✅ Active and ready
-
-## 🔧 **API Endpoints**
-
-### **Deploy Database**
 ```bash
-POST /api/deploy/
+curl -X POST http://localhost:8000/api/postgres \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sql": "CREATE TABLE users (id SERIAL PRIMARY KEY, name VARCHAR(100)); CREATE TABLE posts (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), title VARCHAR(200));"
+  }'
+```
+
+### Response
+
+```json
 {
-  "project_id": "my_project",
-  "database_type": "dynamodb",
-  "database_name": "my_db",
-  "schema_data": {
-    "tables": [
-      {"name": "users", "primary_key": "user_id"},
-      {"name": "posts", "primary_key": "post_id"}
-    ]
-  }
+  "success": true,
+  "message": "Tables created via exec_sql RPC: users, posts",
+  "tables_created": ["users", "posts"],
+  "method": "exec_sql_rpc",
+  "rls_enabled": true
 }
 ```
 
-### **Health Check**
-```bash
-GET /health
+## API Documentation
+
+Visit `http://localhost:8000/docs` for interactive API documentation.
+
+## Project Structure
+
+```
+.
+├── backend/
+│   ├── app/
+│   │   ├── main.py              # FastAPI app
+│   │   ├── core/
+│   │   │   └── config.py         # Configuration
+│   │   └── api/
+│   │       └── routes/
+│   │           └── deploy.py     # Deployment endpoint
+│   ├── claude_supabase_driver.py # Core deployment logic
+│   ├── requirements.txt          # Dependencies
+│   └── .env                       # Your credentials
+├── start_backend.sh               # Start script
+└── README.md
 ```
 
-## 📚 **Documentation**
+## How It Works
 
-- [AWS Infrastructure Complete](docs/AWS_INFRASTRUCTURE_COMPLETE.md)
-- [E-commerce Database Guide](docs/ECOMMERCE_DATABASE_COMPLETE.md)
-- [Two Projects Overview](docs/TWO_PROJECTS_COMPLETE.md)
-- [How to See It in Action](docs/HOW_TO_SEE_IT_IN_ACTION.md)
+1. You send PostgreSQL DDL via REST API
+2. The service calls Supabase's `exec_sql` RPC function
+3. Tables are created in Supabase
+4. RLS is automatically enabled on all tables
+5. Response confirms deployment and RLS status
 
-## 🛠️ **Tech Stack**
+## Requirements
 
-- **Backend**: FastAPI (Python)
-- **Database**: AWS DynamoDB, MongoDB Atlas, PostgreSQL RDS
-- **AI**: OpenAI GPT-4 for schema generation
-- **Cloud**: AWS (boto3)
-- **Frontend**: Vanilla JavaScript
-
-## 🎯 **Features**
-
-- ✅ **Instant Database Deployment** - Deploy in seconds
-- ✅ **AI-Powered Schema Generation** - No manual schema design
-- ✅ **Multiple Database Types** - DynamoDB, MongoDB, PostgreSQL
-- ✅ **Real AWS Resources** - Production-ready infrastructure
-- ✅ **Project Management** - Organized by project IDs
-- ✅ **Sample Data** - Ready-to-use test data
-- ✅ **REST API** - Easy integration
-
-## 🚀 **Next Steps**
-
-1. **Build Frontend** - Create user interface
-2. **Add AI Agent** - Implement schema generation
-3. **Enhance Services** - Complete MongoDB/PostgreSQL
-4. **Add Features** - Search, analytics, monitoring
-
-## 📞 **Support**
-
-This is a hackathon MVP. For questions or issues, check the documentation in the `docs/` directory.
-
----
-
-**Built with ❤️ for rapid database deployment** 🚀
-
+- Python 3.12+
+- Supabase account
+- Active internet connection
