@@ -117,7 +117,7 @@ const Chat = () => {
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setMessage("");
+      setMessage("");
     setIsLoading(true);
 
     try {
@@ -348,7 +348,7 @@ const Chat = () => {
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Send className="h-4 w-4" />
+              <Send className="h-4 w-4" />
               )}
             </Button>
           </div>
@@ -536,7 +536,7 @@ const Chat = () => {
             }}
           />
           <div className="text-center text-muted-foreground relative z-10">
-            <p className="text-lg">Database flowchart will appear here</p>
+          <p className="text-lg">Database flowchart will appear here</p>
             {isDone && (
               <p className="text-sm mt-2 text-primary">Database schema is ready!</p>
             )}
