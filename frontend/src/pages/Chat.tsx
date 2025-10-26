@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Send, Loader2, Maximize2, Rocket } from "lucide-react";
 import { toast } from "sonner";
+import { ChartDBViewer, ChartDBViewerRef } from "@/components/ChartDBViewer";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +41,7 @@ const Chat = () => {
   const [databaseName, setDatabaseName] = useState("");
   const [deploymentType, setDeploymentType] = useState<'dynamodb' | 'supabase'>('dynamodb');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chartDBViewerRef = useRef<ChartDBViewerRef>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -186,6 +188,14 @@ const Chat = () => {
       setIsLoading(false);
     }
   };
+
+  // Auto-load visualization when schema changes
+  useEffect(() => {
+    if (generatedSchema && chartDBViewerRef.current) {
+      console.log("Loading visualization for schema...");
+      chartDBViewerRef.current.loadSchema(generatedSchema);
+    }
+  }, [generatedSchema]);
 
   const handleDeploy = async () => {
     if (!generatedSchema || !databaseName.trim()) {
@@ -361,67 +371,81 @@ const Chat = () => {
         </div>
       </div>
 
-      {/* Right Side - Schema Display */}
+      {/* Right Side - ChartDB Visualization */}
       <div 
         className="flex flex-col p-6 overflow-hidden"
         style={{ width: `${100 - leftWidth}%` }}
       >
         {generatedSchema ? (
-          <div className="flex-1 overflow-y-auto">
-            {/* Generated Schema Card - Top Left */}
+          <div className="flex-1 flex flex-col overflow-hidden space-y-4">
+            {/* Schema Info & Deploy Buttons */}
             <div className="space-y-3">
-              <div 
-                className="bg-card border border-border/50 rounded-lg p-4 cursor-pointer hover:border-primary/50 transition-colors group w-fit"
-                onClick={() => setShowSchemaModal(true)}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold">Generated Schema</h3>
-                  <Maximize2 className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+              <div className="flex items-center justify-between">
+                <div 
+                  className="bg-card border border-border/50 rounded-lg p-4 cursor-pointer hover:border-primary/50 transition-colors group flex-1"
+                  onClick={() => setShowSchemaModal(true)}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold">Generated Schema</h3>
+                    <Maximize2 className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p><span className="font-medium">App Type:</span> {generatedSchema.app_type || 'N/A'}</p>
+                    <p><span className="font-medium">Entities:</span> {generatedSchema.entities?.length || 0}</p>
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground space-y-2">
-                  <p><span className="font-medium">App Type:</span> {generatedSchema.app_type || 'N/A'}</p>
-                  <p><span className="font-medium">Database:</span> {generatedSchema.db_type || 'N/A'}</p>
-                  <p><span className="font-medium">Entities:</span> {generatedSchema.entities?.length || 0}</p>
-                </div>
-              </div>
-              
-              {/* Deploy Buttons */}
-              <div className="flex gap-3 flex-wrap">
-                {/* DynamoDB Deploy Button */}
-                {generatedSchema.dynamodb_tables && generatedSchema.dynamodb_tables.length > 0 && (
-                  <Button
-                    onClick={() => {
-                      setDeploymentType('dynamodb');
-                      setShowDeployDialog(true);
-                    }}
-                    className="w-fit bg-gradient-to-r from-green-600 to-emerald-600 hover:opacity-90"
-                  >
-                    <Rocket className="mr-2 h-4 w-4" />
-                    Deploy to AWS DynamoDB
-                  </Button>
-                )}
                 
-                {/* Supabase Deploy Button */}
-                {generatedSchema.postgres_sql && generatedSchema.postgres_sql.trim() && (
-                  <Button
-                    onClick={() => {
-                      setDeploymentType('supabase');
-                      setShowDeployDialog(true);
-                    }}
-                    className="w-fit bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90"
-                  >
-                    <Rocket className="mr-2 h-4 w-4" />
-                    Deploy to Supabase
-                  </Button>
-                )}
+                {/* Deploy Buttons */}
+                <div className="flex gap-3">
+                  {generatedSchema.dynamodb_tables && generatedSchema.dynamodb_tables.length > 0 && (
+                    <Button
+                      onClick={() => {
+                        setDeploymentType('dynamodb');
+                        setShowDeployDialog(true);
+                      }}
+                      className="bg-gradient-to-r from-green-600 to-emerald-600 hover:opacity-90"
+                      size="sm"
+                    >
+                      <Rocket className="mr-2 h-4 w-4" />
+                      Deploy DynamoDB
+                    </Button>
+                  )}
+                  
+                  {generatedSchema.postgres_sql && generatedSchema.postgres_sql.trim() && (
+                    <Button
+                      onClick={() => {
+                        setDeploymentType('supabase');
+                        setShowDeployDialog(true);
+                      }}
+                      className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90"
+                      size="sm"
+                    >
+                      <Rocket className="mr-2 h-4 w-4" />
+                      Deploy Supabase
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
+            {/* ChartDB Visualization */}
+            <div className="flex-1 overflow-hidden min-h-[600px]">
+              <ChartDBViewer
+                ref={chartDBViewerRef}
+                projectId={sessionId || "default"}
+                deploymentType="supabase"
+                onSchemaUpdate={(updatedSchema) => {
+                  console.log("Schema updated:", updatedSchema);
+                  toast.success("Schema updated from ChartDB!");
+                }}
+              />
+            </div>
           </div>
         ) : (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-muted-foreground">
               <p className="text-lg">Complete the conversation to generate your database schema</p>
+              <p className="text-sm mt-2">The visualization will appear automatically here</p>
             </div>
           </div>
         )}
