@@ -12,7 +12,7 @@ class DeploymentRequest(BaseModel):
     project_id: str
     database_type: DatabaseType
     database_name: str
-    schema_data: Union[Dict[str, Any], List[Dict[str, Any]]]  # Support both simplified and full DynamoDB formats
+    schema_data: Union[str, Dict[str, Any], List[Dict[str, Any]]]  # String for PostgreSQL SQL, dict/list for DynamoDB
     region: Optional[str] = "us-east-1"
     
 

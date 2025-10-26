@@ -3,8 +3,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Send, Loader2, Maximize2 } from "lucide-react";
+import { Send, Loader2, Maximize2, Rocket } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Label } from "@/components/ui/label";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -24,6 +35,9 @@ const Chat = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [generatedSchema, setGeneratedSchema] = useState<any>(null);
   const [showSchemaModal, setShowSchemaModal] = useState(false);
+  const [showDeployDialog, setShowDeployDialog] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [databaseName, setDatabaseName] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -172,6 +186,51 @@ const Chat = () => {
     }
   };
 
+  const handleDeploy = async () => {
+    if (!generatedSchema || !databaseName.trim()) {
+      toast.error("Please enter a database name");
+      return;
+    }
+
+    // Check if DynamoDB tables are available
+    if (!generatedSchema.dynamodb_tables || generatedSchema.dynamodb_tables.length === 0) {
+      toast.error("DynamoDB schema not generated yet. Please wait for the schema to be generated.");
+      setShowDeployDialog(false);
+      return;
+    }
+
+    setIsDeploying(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/projects/deploy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: sessionId || "default",
+          database_type: "dynamodb", // Always DynamoDB
+          database_name: databaseName,
+          spec: generatedSchema
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      toast.success(`Deployment successful! ${result.message}`);
+      console.log("Deployment result:", result);
+      
+      setShowDeployDialog(false);
+      setDatabaseName("");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Deployment failed: ${errorMessage}`);
+    } finally {
+      setIsDeploying(false);
+    }
+  };
+
   return (
     <div className="h-screen bg-gradient-to-b from-background to-muted flex overflow-hidden">
       {/* Left Side - Chat */}
@@ -291,19 +350,32 @@ const Chat = () => {
         {generatedSchema ? (
           <div className="flex-1 overflow-y-auto">
             {/* Generated Schema Card - Top Left */}
-            <div 
-              className="bg-card border border-border/50 rounded-lg p-4 cursor-pointer hover:border-primary/50 transition-colors group mb-4 w-fit"
-              onClick={() => setShowSchemaModal(true)}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold">Generated Schema</h3>
-                <Maximize2 className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            <div className="space-y-3">
+              <div 
+                className="bg-card border border-border/50 rounded-lg p-4 cursor-pointer hover:border-primary/50 transition-colors group w-fit"
+                onClick={() => setShowSchemaModal(true)}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold">Generated Schema</h3>
+                  <Maximize2 className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+                <div className="text-sm text-muted-foreground space-y-2">
+                  <p><span className="font-medium">App Type:</span> {generatedSchema.app_type || 'N/A'}</p>
+                  <p><span className="font-medium">Database:</span> {generatedSchema.db_type || 'N/A'}</p>
+                  <p><span className="font-medium">Entities:</span> {generatedSchema.entities?.length || 0}</p>
+                </div>
               </div>
-              <div className="text-sm text-muted-foreground space-y-2">
-                <p><span className="font-medium">App Type:</span> {generatedSchema.app_type || 'N/A'}</p>
-                <p><span className="font-medium">Database:</span> {generatedSchema.db_type || 'N/A'}</p>
-                <p><span className="font-medium">Entities:</span> {generatedSchema.entities?.length || 0}</p>
-              </div>
+              
+              {/* Deploy Button - Only show if DynamoDB tables are available */}
+              {generatedSchema.dynamodb_tables && generatedSchema.dynamodb_tables.length > 0 && (
+                <Button
+                  onClick={() => setShowDeployDialog(true)}
+                  className="w-fit bg-gradient-to-r from-green-600 to-emerald-600 hover:opacity-90"
+                >
+                  <Rocket className="mr-2 h-4 w-4" />
+                  Deploy to AWS DynamoDB
+                </Button>
+              )}
             </div>
 
           </div>
@@ -406,6 +478,61 @@ const Chat = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Deploy Dialog */}
+      <AlertDialog open={showDeployDialog} onOpenChange={setShowDeployDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deploy to AWS DynamoDB</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deploy your database schema to AWS DynamoDB. Enter a name for your database.
+              <span className="block mt-2 text-sm">
+                Database Type: <strong>DynamoDB</strong> (PostgreSQL deployment not yet supported)
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="database-name">Database Name</Label>
+              <Input
+                id="database-name"
+                placeholder="my-database"
+                value={databaseName}
+                onChange={(e) => setDatabaseName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isDeploying) {
+                    handleDeploy();
+                  }
+                }}
+                disabled={isDeploying}
+              />
+              <p className="text-xs text-muted-foreground">
+                Use lowercase letters, numbers, and hyphens only
+              </p>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeploying}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeploy}
+              disabled={isDeploying || !databaseName.trim()}
+              className="bg-gradient-to-r from-green-600 to-emerald-600"
+            >
+              {isDeploying ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deploying...
+                </>
+              ) : (
+                <>
+                  <Rocket className="mr-2 h-4 w-4" />
+                  Deploy
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

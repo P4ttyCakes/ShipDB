@@ -6,6 +6,10 @@ from loguru import logger
 
 from app.services.ai_agent import agent_service
 from app.services.schema_generator import generate_all
+from app.models.deployment import DeploymentRequest, DeploymentResponse, DatabaseType
+from app.services.deployment.factory import DeploymentFactory
+import os
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -155,3 +159,64 @@ async def chat_finish(payload: ChatFinishRequest):
     except Exception as e:
         logger.exception("chat_finish failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class DeployRequest(BaseModel):
+    project_id: str
+    database_type: str  # "dynamodb" or "postgresql"
+    database_name: str
+    spec: Dict[str, Any]
+
+
+@router.post("/deploy", response_model=DeploymentResponse)
+async def deploy_database(payload: DeployRequest):
+    """Deploy database schema to AWS DynamoDB"""
+    try:
+        logger.info(f"Deployment request for project {payload.project_id}")
+        
+        # Use AWS credentials from settings
+        os.environ['AWS_ACCESS_KEY_ID'] = settings.AWS_ACCESS_KEY_ID or os.getenv('AWS_ACCESS_KEY_ID', '')
+        os.environ['AWS_SECRET_ACCESS_KEY'] = settings.AWS_SECRET_ACCESS_KEY or os.getenv('AWS_SECRET_ACCESS_KEY', '')
+        os.environ['AWS_REGION'] = settings.AWS_REGION or 'us-east-1'
+        
+        # ALWAYS use DynamoDB for deployment (PostgreSQL deployment not yet supported)
+        schema_data = payload.spec.get("dynamodb_tables", [])
+        if not schema_data:
+            raise HTTPException(status_code=400, detail="DynamoDB schema not found in spec. Please ensure schema generation completed successfully.")
+        
+        db_type = DatabaseType.DYNAMODB
+        
+        # Create deployment request
+        request = DeploymentRequest(
+            project_id=payload.project_id,
+            database_type=db_type,
+            database_name=payload.database_name,
+            schema_data=schema_data,
+            region=os.getenv('AWS_REGION', 'us-east-1')
+        )
+        
+        # Get appropriate deployment service
+        service = DeploymentFactory.get_service(db_type)
+        
+        if not service:
+            raise HTTPException(status_code=400, detail=f"Invalid database type: {payload.database_type}")
+        
+        # Validate credentials
+        if not await service.validate_credentials():
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid AWS credentials. Please check your AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
+            )
+        
+        # Execute deployment
+        logger.info(f"Starting deployment for project {payload.project_id}")
+        result = await service.deploy(request)
+        
+        logger.success(f"Deployment completed: {result.deployment_id}")
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Deployment failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Deployment failed: {str(e)}")
