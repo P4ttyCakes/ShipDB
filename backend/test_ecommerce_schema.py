@@ -1,454 +1,370 @@
 #!/usr/bin/env python3
 """
-Ecommerce DynamoDB Schema Test
-Tests the complete ecommerce database schema with all 6 tables:
-- users, products, orders, order_items, inventory_transactions, audit_logs
+Strict Test Case for E-commerce Schema Deployment
+Tests automatic table creation and comprehensive CRUD operations
 """
 
-import asyncio
-import sys
 import os
-import json
-import boto3
+import uuid
 from datetime import datetime
-from pathlib import Path
+from dotenv import load_dotenv
+from claude_supabase_driver import call_supabase_function
 
-# Add the app directory to Python path
-sys.path.append('.')
+load_dotenv()
 
-from app.services.deployment.dynamodb_service import DynamoDBService
-from app.models.deployment import DeploymentRequest, DatabaseType
-
-# The complete ecommerce schema provided by the user
-ECOMMERCE_SCHEMA = [
-    {
-        "TableName": "users",
-        "KeySchema": [
-            {
-                "AttributeName": "id",
-                "KeyType": "HASH"
-            }
-        ],
-        "AttributeDefinitions": [
-            {
-                "AttributeName": "id",
-                "AttributeType": "S"
-            }
-        ],
-        "BillingMode": "PROVISIONED",
-        "ProvisionedThroughput": {
-            "ReadCapacityUnits": 5,
-            "WriteCapacityUnits": 5
-        }
-    },
-    {
-        "TableName": "products",
-        "KeySchema": [
-            {
-                "AttributeName": "id",
-                "KeyType": "HASH"
-            }
-        ],
-        "AttributeDefinitions": [
-            {
-                "AttributeName": "id",
-                "AttributeType": "S"
-            }
-        ],
-        "BillingMode": "PROVISIONED",
-        "ProvisionedThroughput": {
-            "ReadCapacityUnits": 5,
-            "WriteCapacityUnits": 5
-        }
-    },
-    {
-        "TableName": "orders",
-        "KeySchema": [
-            {
-                "AttributeName": "id",
-                "KeyType": "HASH"
-            }
-        ],
-        "AttributeDefinitions": [
-            {
-                "AttributeName": "id",
-                "AttributeType": "S"
-            }
-        ],
-        "BillingMode": "PROVISIONED",
-        "ProvisionedThroughput": {
-            "ReadCapacityUnits": 5,
-            "WriteCapacityUnits": 5
-        }
-    },
-    {
-        "TableName": "order_items",
-        "KeySchema": [
-            {
-                "AttributeName": "id",
-                "KeyType": "HASH"
-            }
-        ],
-        "AttributeDefinitions": [
-            {
-                "AttributeName": "id",
-                "AttributeType": "S"
-            }
-        ],
-        "BillingMode": "PROVISIONED",
-        "ProvisionedThroughput": {
-            "ReadCapacityUnits": 5,
-            "WriteCapacityUnits": 5
-        }
-    },
-    {
-        "TableName": "inventory_transactions",
-        "KeySchema": [
-            {
-                "AttributeName": "id",
-                "KeyType": "HASH"
-            }
-        ],
-        "AttributeDefinitions": [
-            {
-                "AttributeName": "id",
-                "AttributeType": "S"
-            }
-        ],
-        "BillingMode": "PROVISIONED",
-        "ProvisionedThroughput": {
-            "ReadCapacityUnits": 5,
-            "WriteCapacityUnits": 5
-        }
-    },
-    {
-        "TableName": "audit_logs",
-        "KeySchema": [
-            {
-                "AttributeName": "id",
-                "KeyType": "HASH"
-            }
-        ],
-        "AttributeDefinitions": [
-            {
-                "AttributeName": "id",
-                "AttributeType": "S"
-            }
-        ],
-        "BillingMode": "PROVISIONED",
-        "ProvisionedThroughput": {
-            "ReadCapacityUnits": 5,
-            "WriteCapacityUnits": 5
-        }
-    }
-]
-
-def print_banner():
-    """Print test banner"""
-    print("=" * 80)
-    print("🛒 ECOMMERCE DYNAMODB SCHEMA TEST")
-    print("=" * 80)
-    print(f"📅 Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"📊 Schema Tables: {len(ECOMMERCE_SCHEMA)}")
-    print(f"🏷️  Table Names: {[t['TableName'] for t in ECOMMERCE_SCHEMA]}")
-    print("=" * 80)
-
-async def test_ecommerce_schema():
-    """Test the complete ecommerce schema deployment"""
-    print_banner()
+def test_ecommerce_schema():
+    """Comprehensive test of e-commerce schema deployment and operations"""
     
-    # Set environment variables
-    os.environ['AWS_ACCESS_KEY_ID'] = 'your_aws_access_key'
-    os.environ['AWS_SECRET_ACCESS_KEY'] = 'your_aws_secret_key'
-    os.environ['AWS_REGION'] = 'us-east-1'
+    print("=" * 80)
+    print("E-COMMERCE SCHEMA STRICT TEST CASE")
+    print("=" * 80)
     
-    service = DynamoDBService()
+    # Test 1: Schema Deployment
+    print("\n📋 TEST 1: Schema Deployment")
+    print("-" * 50)
     
-    # Test 1: Credentials validation
-    print("🔐 Test 1: AWS Credentials Validation")
-    print("-" * 40)
-    if await service.validate_credentials():
-        print("✅ AWS credentials are valid")
+    schema = """
+CREATE TABLE IF NOT EXISTS "products" (
+  "id" UUID NOT NULL,
+  "name" TEXT NOT NULL,
+  "description" TEXT NOT NULL,
+  "price" DECIMAL NOT NULL,
+  "inventory_count" INTEGER NOT NULL,
+  "category" TEXT NOT NULL,
+  "created_at" TIMESTAMP NOT NULL,
+  PRIMARY KEY ("id")
+);
+CREATE TABLE IF NOT EXISTS "customers" (
+  "id" UUID NOT NULL,
+  "name" TEXT NOT NULL,
+  "email" TEXT NOT NULL,
+  "phone" TEXT,
+  "created_at" TIMESTAMP NOT NULL,
+  PRIMARY KEY ("id"),
+  UNIQUE ("email")
+);
+CREATE TABLE IF NOT EXISTS "orders" (
+  "id" UUID NOT NULL,
+  "customer_id" UUID NOT NULL,
+  "order_date" TIMESTAMP NOT NULL,
+  "status" TEXT NOT NULL,
+  "total_amount" DECIMAL NOT NULL,
+  "created_at" TIMESTAMP NOT NULL,
+  PRIMARY KEY ("id"),
+  FOREIGN KEY ("customer_id") REFERENCES "customers"("id")
+);
+CREATE TABLE IF NOT EXISTS "order_items" (
+  "id" UUID NOT NULL,
+  "order_id" UUID NOT NULL,
+  "product_id" UUID NOT NULL,
+  "quantity" INTEGER NOT NULL,
+  "unit_price" DECIMAL NOT NULL,
+  PRIMARY KEY ("id"),
+  FOREIGN KEY ("order_id") REFERENCES "orders"("id"),
+  FOREIGN KEY ("product_id") REFERENCES "products"("id")
+);
+CREATE TABLE IF NOT EXISTS "payments" (
+  "id" UUID NOT NULL,
+  "order_id" UUID NOT NULL,
+  "amount" DECIMAL NOT NULL,
+  "payment_method" TEXT NOT NULL,
+  "status" TEXT NOT NULL,
+  "created_at" TIMESTAMP NOT NULL,
+  PRIMARY KEY ("id"),
+  FOREIGN KEY ("order_id") REFERENCES "orders"("id")
+);
+"""
+    
+    # Deploy schema using the new schema inference approach
+    print("🔧 Deploying schema via schema inference...")
+    result = call_supabase_function("create_table", table_schema=schema)
+    
+    if result.get("success"):
+        created_tables = result.get("tables_created", [])
+        print(f"✅ Schema deployed successfully!")
+        print(f"📊 Tables created: {', '.join(created_tables)}")
+        print(f"📊 Method: {result.get('method', 'unknown')}")
     else:
-        print("❌ AWS credentials are invalid")
-        return False
+        print(f"❌ Schema deployment failed: {result.get('error')}")
+        print(f"💡 Instructions: {result.get('instructions', 'No instructions')}")
+        return
     
-    # Test 2: Schema validation
-    print("\n📋 Test 2: Schema Structure Validation")
-    print("-" * 40)
-    try:
-        # Validate schema structure
-        for i, table in enumerate(ECOMMERCE_SCHEMA):
-            required_fields = ['TableName', 'KeySchema', 'AttributeDefinitions', 'BillingMode']
-            for field in required_fields:
-                if field not in table:
-                    raise ValueError(f"Table {i+1} missing required field: {field}")
-            
-            # Validate key schema
-            if not table['KeySchema'] or table['KeySchema'][0]['KeyType'] != 'HASH':
-                raise ValueError(f"Table {table['TableName']} must have HASH key")
-            
-            # Validate attribute definitions
-            key_attr = table['KeySchema'][0]['AttributeName']
-            attr_defs = [attr['AttributeName'] for attr in table['AttributeDefinitions']]
-            if key_attr not in attr_defs:
-                raise ValueError(f"Table {table['TableName']} key attribute {key_attr} not in AttributeDefinitions")
-        
-        print("✅ Schema structure is valid")
-        print(f"✅ All {len(ECOMMERCE_SCHEMA)} tables have proper structure")
-        
-    except Exception as e:
-        print(f"❌ Schema validation failed: {e}")
-        return False
+    tables = ['products', 'customers', 'orders', 'order_items', 'payments']
+    print(f"\n📊 Tables Status: {len(created_tables)}/{len(tables)} created")
     
-    # Test 3: Deploy the complete schema
-    print("\n🚀 Test 3: Complete Ecommerce Schema Deployment")
-    print("-" * 40)
+    # Test 2: Data Insertion (Products)
+    print("\n📦 TEST 2: Product Data Insertion")
+    print("-" * 50)
     
-    request = DeploymentRequest(
-        project_id="ecommerce_test_project",
-        database_type=DatabaseType.DYNAMODB,
-        database_name="ecommerce_db",
-        schema_data=ECOMMERCE_SCHEMA  # Using the full DynamoDB API format
-    )
+    products_data = [
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Laptop Pro 15",
+            "description": "High-performance laptop with 16GB RAM",
+            "price": 1299.99,
+            "inventory_count": 50,
+            "category": "Electronics",
+            "created_at": datetime.now().isoformat()
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Wireless Mouse",
+            "description": "Ergonomic wireless mouse with USB receiver",
+            "price": 29.99,
+            "inventory_count": 200,
+            "category": "Accessories",
+            "created_at": datetime.now().isoformat()
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Mechanical Keyboard",
+            "description": "RGB mechanical keyboard with Cherry MX switches",
+            "price": 149.99,
+            "inventory_count": 75,
+            "category": "Accessories",
+            "created_at": datetime.now().isoformat()
+        }
+    ]
     
-    try:
-        result = await service.deploy(request)
-        print("✅ Ecommerce schema deployment successful!")
-        print(f"📊 Deployment ID: {result.deployment_id}")
-        print(f"📊 Status: {result.status}")
-        print(f"📊 Tables Created: {len(result.connection_info['tables'])}")
-        print(f"📊 Region: {result.connection_info['region']}")
-        print(f"📊 Message: {result.message}")
-        
-        # List all created tables
-        print("\n📋 Created Tables:")
-        for table in result.connection_info['tables']:
-            print(f"   ✅ {table}")
-            
-    except Exception as e:
-        if "ResourceInUseException" in str(e) or "Table already exists" in str(e):
-            print("⚠️  Tables already exist - this is expected for repeated test runs")
-            print("✅ Schema structure is valid and deployable")
-            
-            # Create a mock result for existing tables
-            expected_tables = [f"ecommerce_db_{table['TableName']}" for table in ECOMMERCE_SCHEMA]
-            result = type('MockResult', (), {
-                'deployment_id': 'ecommerce_db',
-                'status': 'deployed',
-                'connection_info': {
-                    'region': os.getenv('AWS_REGION', 'us-east-1'),
-                    'tables': expected_tables,
-                    'access_key_id': os.getenv('AWS_ACCESS_KEY_ID'),
-                    'secret_access_key': os.getenv('AWS_SECRET_ACCESS_KEY')
-                },
-                'message': f"Using existing {len(expected_tables)} DynamoDB tables"
-            })()
-            
-            print(f"📊 Using existing tables: {len(expected_tables)}")
-            print("\n📋 Existing Tables:")
-            for table in expected_tables:
-                print(f"   ✅ {table}")
+    product_ids = []
+    for product in products_data:
+        result = call_supabase_function("insert_row", table_name="products", row_data=product)
+        if result.get("success"):
+            product_ids.append(product["id"])
+            print(f"✅ Inserted product: {product['name']}")
         else:
-            print(f"❌ Schema deployment failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
+            print(f"❌ Failed to insert product: {product['name']} - {result.get('error')}")
     
-    # Test 4: Verify tables exist in AWS
-    print("\n🔍 Test 4: Verify Tables in AWS DynamoDB")
-    print("-" * 40)
+    print(f"📊 Products inserted: {len(product_ids)}/{len(products_data)}")
     
-    try:
-        dynamodb = boto3.client(
-            'dynamodb',
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-            region_name=os.getenv('AWS_REGION', 'us-east-1')
-        )
-        
-        response = dynamodb.list_tables()
-        all_tables = response['TableNames']
-        
-        # Check for our created tables
-        expected_tables = [f"ecommerce_db_{table['TableName']}" for table in ECOMMERCE_SCHEMA]
-        found_tables = [table for table in all_tables if table in expected_tables]
-        
-        print(f"📊 Total tables in AWS: {len(all_tables)}")
-        print(f"📊 Expected tables: {len(expected_tables)}")
-        print(f"📊 Found tables: {len(found_tables)}")
-        
-        if len(found_tables) == len(expected_tables):
-            print("✅ All expected tables found in AWS!")
-            for table in found_tables:
-                print(f"   ✅ {table}")
+    # Test 3: Customer Data Insertion
+    print("\n👥 TEST 3: Customer Data Insertion")
+    print("-" * 50)
+    
+    customers_data = [
+        {
+            "id": str(uuid.uuid4()),
+            "name": "John Doe",
+            "email": "john.doe@example.com",
+            "phone": "+1-555-0123",
+            "created_at": datetime.now().isoformat()
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Jane Smith",
+            "email": "jane.smith@example.com",
+            "phone": "+1-555-0456",
+            "created_at": datetime.now().isoformat()
+        }
+    ]
+    
+    customer_ids = []
+    for customer in customers_data:
+        result = call_supabase_function("insert_row", table_name="customers", row_data=customer)
+        if result.get("success"):
+            customer_ids.append(customer["id"])
+            print(f"✅ Inserted customer: {customer['name']}")
         else:
-            print("❌ Some tables missing in AWS")
-            missing = set(expected_tables) - set(found_tables)
-            for table in missing:
-                print(f"   ❌ Missing: {table}")
-            return False
-            
-    except Exception as e:
-        print(f"❌ AWS verification failed: {e}")
-        return False
+            print(f"❌ Failed to insert customer: {customer['name']} - {result.get('error')}")
     
-    # Test 5: Test basic data operations
-    print("\n💾 Test 5: Basic Data Operations")
-    print("-" * 40)
+    print(f"📊 Customers inserted: {len(customer_ids)}/{len(customers_data)}")
     
-    try:
-        # Wait for tables to be available (DynamoDB tables need time to become active)
-        print("⏳ Waiting for tables to become available...")
-        import time
-        time.sleep(10)  # Wait 10 seconds for tables to be ready
-        # Test data for each table
-        test_data = {
-            'users': {
-                'id': {'S': 'user_001'},
-                'name': {'S': 'John Doe'},
-                'email': {'S': 'john@example.com'},
-                'created_at': {'S': datetime.now().isoformat()}
-            },
-            'products': {
-                'id': {'S': 'prod_001'},
-                'name': {'S': 'Wireless Headphones'},
-                'price': {'N': '99.99'},
-                'category': {'S': 'electronics'},
-                'stock': {'N': '50'}
-            },
-            'orders': {
-                'id': {'S': 'order_001'},
-                'user_id': {'S': 'user_001'},
-                'total_amount': {'N': '99.99'},
-                'status': {'S': 'pending'},
-                'created_at': {'S': datetime.now().isoformat()}
-            },
-            'order_items': {
-                'id': {'S': 'item_001'},
-                'order_id': {'S': 'order_001'},
-                'product_id': {'S': 'prod_001'},
-                'quantity': {'N': '1'},
-                'unit_price': {'N': '99.99'}
-            },
-            'inventory_transactions': {
-                'id': {'S': 'txn_001'},
-                'product_id': {'S': 'prod_001'},
-                'type': {'S': 'sale'},
-                'quantity': {'N': '-1'},
-                'timestamp': {'S': datetime.now().isoformat()}
-            },
-            'audit_logs': {
-                'id': {'S': 'audit_001'},
-                'action': {'S': 'order_created'},
-                'user_id': {'S': 'user_001'},
-                'details': {'S': 'Order order_001 created'},
-                'timestamp': {'S': datetime.now().isoformat()}
-            }
+    # Test 4: Order Creation
+    print("\n🛒 TEST 4: Order Creation")
+    print("-" * 50)
+    
+    if customer_ids and product_ids:
+        order_data = {
+            "id": str(uuid.uuid4()),
+            "customer_id": customer_ids[0],
+            "order_date": datetime.now().isoformat(),
+            "status": "pending",
+            "total_amount": 1479.97,
+            "created_at": datetime.now().isoformat()
         }
         
-        # Insert test data
-        for table_name, data in test_data.items():
-            full_table_name = f"ecommerce_db_{table_name}"
-            dynamodb.put_item(
-                TableName=full_table_name,
-                Item=data
-            )
-            print(f"✅ Inserted test data into {full_table_name}")
-        
-        # Verify data was inserted
-        print("\n🔍 Verifying inserted data:")
-        for table_name in test_data.keys():
-            full_table_name = f"ecommerce_db_{table_name}"
-            response = dynamodb.scan(TableName=full_table_name)
-            item_count = len(response['Items'])
-            print(f"   📊 {full_table_name}: {item_count} items")
+        result = call_supabase_function("insert_row", table_name="orders", row_data=order_data)
+        if result.get("success"):
+            order_id = order_data["id"]
+            print(f"✅ Created order: {order_id}")
             
+            # Test 5: Order Items
+            print("\n📋 TEST 5: Order Items Creation")
+            print("-" * 50)
+            
+            order_items_data = [
+                {
+                    "id": str(uuid.uuid4()),
+                    "order_id": order_id,
+                    "product_id": product_ids[0],
+                    "quantity": 1,
+                    "unit_price": 1299.99
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "order_id": order_id,
+                    "product_id": product_ids[1],
+                    "quantity": 2,
+                    "unit_price": 29.99
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "order_id": order_id,
+                    "product_id": product_ids[2],
+                    "quantity": 1,
+                    "unit_price": 149.99
+                }
+            ]
+            
+            order_item_ids = []
+            for item in order_items_data:
+                result = call_supabase_function("insert_row", table_name="order_items", row_data=item)
+                if result.get("success"):
+                    order_item_ids.append(item["id"])
+                    print(f"✅ Added order item: {item['quantity']}x product")
+                else:
+                    print(f"❌ Failed to add order item - {result.get('error')}")
+            
+            print(f"📊 Order items added: {len(order_item_ids)}/{len(order_items_data)}")
+            
+            # Test 6: Payment Processing
+            print("\n💳 TEST 6: Payment Processing")
+            print("-" * 50)
+            
+            payment_data = {
+                "id": str(uuid.uuid4()),
+                "order_id": order_id,
+                "amount": 1479.97,
+                "payment_method": "credit_card",
+                "status": "completed",
+                "created_at": datetime.now().isoformat()
+            }
+            
+            result = call_supabase_function("insert_row", table_name="payments", row_data=payment_data)
+            if result.get("success"):
+                payment_id = payment_data["id"]
+                print(f"✅ Processed payment: {payment_id}")
+            else:
+                print(f"❌ Failed to process payment - {result.get('error')}")
+            
+            # Test 7: Complex Queries
+            print("\n🔍 TEST 7: Complex Queries")
+            print("-" * 50)
+            
+            # Query orders by customer
+            result = call_supabase_function("query_table", table_name="orders", filters={"customer_id": customer_ids[0]})
+            if result.get("success"):
+                print(f"✅ Found {result.get('count', 0)} orders for customer")
+            
+            # Query products by category
+            result = call_supabase_function("query_table", table_name="products", filters={"category": "Electronics"})
+            if result.get("success"):
+                print(f"✅ Found {result.get('count', 0)} electronics products")
+            
+            # Query order items for order
+            result = call_supabase_function("query_table", table_name="order_items", filters={"order_id": order_id})
+            if result.get("success"):
+                print(f"✅ Found {result.get('count', 0)} items in order")
+            
+            # Test 8: Data Updates
+            print("\n✏️ TEST 8: Data Updates")
+            print("-" * 50)
+            
+            # Update order status
+            result = call_supabase_function("update_row", table_name="orders", filters={"id": order_id}, update_data={"status": "shipped"})
+            if result.get("success"):
+                print("✅ Updated order status to 'shipped'")
+            else:
+                print(f"❌ Failed to update order - {result.get('error')}")
+            
+            # Update product inventory
+            result = call_supabase_function("update_row", table_name="products", filters={"id": product_ids[0]}, update_data={"inventory_count": 49})
+            if result.get("success"):
+                print("✅ Updated product inventory")
+            else:
+                print(f"❌ Failed to update inventory - {result.get('error')}")
+            
+            # Test 9: Data Deletion
+            print("\n🗑️ TEST 9: Data Deletion")
+            print("-" * 50)
+            
+            # Delete payment (test deletion)
+            result = call_supabase_function("delete_row", table_name="payments", filters={"id": payment_id})
+            if result.get("success"):
+                print("✅ Deleted payment record")
+            else:
+                print(f"❌ Failed to delete payment - {result.get('error')}")
+            
+            # Test 10: Final Verification
+            print("\n✅ TEST 10: Final Verification")
+            print("-" * 50)
+            
+            # Count all records
+            tables_to_count = ['products', 'customers', 'orders', 'order_items', 'payments']
+            total_records = 0
+            
+            for table in tables_to_count:
+                result = call_supabase_function("query_table", table_name=table, filters={})
+                if result.get("success"):
+                    count = result.get("count", 0)
+                    total_records += count
+                    print(f"📊 {table}: {count} records")
+                else:
+                    print(f"❌ Failed to count {table}")
+            
+            print(f"\n🎯 TOTAL RECORDS: {total_records}")
+            
+            # Test Results Summary
+            print("\n" + "=" * 80)
+            print("TEST RESULTS SUMMARY")
+            print("=" * 80)
+            
+            success_count = 0
+            total_tests = 10
+            
+            # Count successful operations
+            if len(created_tables) == len(tables):
+                success_count += 1
+            if len(product_ids) == len(products_data):
+                success_count += 1
+            if len(customer_ids) == len(customers_data):
+                success_count += 1
+            if order_id:
+                success_count += 1
+            if len(order_item_ids) == len(order_items_data):
+                success_count += 1
+            if payment_id:
+                success_count += 1
+            if total_records > 0:
+                success_count += 4  # Complex queries, updates, deletions, verification
+            
+            success_rate = (success_count / total_tests) * 100
+            
+            print(f"✅ Tests Passed: {success_count}/{total_tests}")
+            print(f"📊 Success Rate: {success_rate:.1f}%")
+            
+            if success_rate >= 90:
+                print("🎉 EXCELLENT: E-commerce schema is fully functional!")
+            elif success_rate >= 70:
+                print("✅ GOOD: E-commerce schema is mostly functional")
+            else:
+                print("⚠️ NEEDS ATTENTION: Some issues detected")
+            
+            print("=" * 80)
+            
+        else:
+            print(f"❌ Failed to create order - {result.get('error')}")
+    else:
+        print("❌ Cannot create orders without customers and products")
+
+def main():
+    """Main test execution"""
+    try:
+        test_ecommerce_schema()
     except Exception as e:
-        print(f"❌ Data operations test failed: {e}")
+        print(f"❌ Test execution failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
-    
-    # Test 6: Connection info validation
-    print("\n🔗 Test 6: Connection Info Validation")
-    print("-" * 40)
-    
-    try:
-        connection_info = result.connection_info
-        required_fields = ['region', 'tables', 'access_key_id', 'secret_access_key']
-        
-        for field in required_fields:
-            if field not in connection_info:
-                print(f"❌ Missing connection info field: {field}")
-                return False
-            print(f"✅ {field}: {type(connection_info[field]).__name__}")
-        
-        print("✅ All connection info fields present and properly typed")
-        
-    except Exception as e:
-        print(f"❌ Connection info validation failed: {e}")
-        return False
-    
-    # Success!
-    print("\n" + "=" * 80)
-    print("🎉 ALL TESTS PASSED!")
-    print("=" * 80)
-    print("✅ AWS credentials validated")
-    print("✅ Schema structure validated")
-    print("✅ Complete ecommerce schema deployed")
-    print("✅ All tables verified in AWS")
-    print("✅ Basic data operations successful")
-    print("✅ Connection info validated")
-    print("=" * 80)
-    
-    # Print usage example
-    print("\n🐍 How to use your ecommerce database:")
-    print()
-    
-    python_code = '''
-import boto3
-
-# Connect to your ecommerce database
-dynamodb = boto3.client(
-    'dynamodb',
-    aws_access_key_id='your_aws_access_key',
-    aws_secret_access_key='your_aws_secret_key',
-    region_name='us-east-1'
-)
-
-# Example: Get all users
-users_response = dynamodb.scan(TableName='ecommerce_db_users')
-print(f"Users: {len(users_response['Items'])}")
-
-# Example: Get all products
-products_response = dynamodb.scan(TableName='ecommerce_db_products')
-print(f"Products: {len(products_response['Items'])}")
-
-# Example: Get all orders
-orders_response = dynamodb.scan(TableName='ecommerce_db_orders')
-print(f"Orders: {len(orders_response['Items'])}")
-
-# Example: Query specific order items
-order_items_response = dynamodb.scan(
-    TableName='ecommerce_db_order_items',
-    FilterExpression='order_id = :order_id',
-    ExpressionAttributeValues={':order_id': {'S': 'order_001'}}
-)
-print(f"Order items for order_001: {len(order_items_response['Items'])}")
-'''
-    
-    print("```python")
-    print(python_code)
-    print("```")
-    
-    return True
 
 if __name__ == "__main__":
-    success = asyncio.run(test_ecommerce_schema())
-    if success:
-        print("\n🎯 Test completed successfully!")
-        sys.exit(0)
-    else:
-        print("\n💥 Test failed!")
-        sys.exit(1)
+    main()

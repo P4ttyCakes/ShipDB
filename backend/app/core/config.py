@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: Optional[str] = None
     SUPABASE_KEY: Optional[str] = None
     SUPABASE_SERVICE_KEY: Optional[str] = None
+    SUPABASE_DB_URL: Optional[str] = None  # PostgreSQL connection string for DDL operations
     
     # Claude AI
     CLAUDE_API_KEY: Optional[str] = None
