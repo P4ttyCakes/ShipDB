@@ -95,46 +95,6 @@ def to_json_schema(spec: Dict[str, Any]) -> Dict[str, Any]:
     return {"$schema": "http://json-schema.org/draft-07/schema#", "definitions": definitions}
 
 
-def to_mongo_scripts(spec: Dict[str, Any]) -> List[str]:
-    scripts: List[str] = []
-    dbname = spec.get("name", "shipdb")
-    scripts.append(f"use {dbname}")
-    for ent in spec.get("entities", []):
-        cname = ent["name"]
-        scripts.append(f"db.createCollection('{cname}')")
-        
-        # Create indexes for primary key fields
-        pk_fields = [f for f in ent.get("fields", []) if f.get("primary_key")]
-        if pk_fields:
-            pk_index = {f["name"]: 1 for f in pk_fields}
-            scripts.append(f"db.{cname}.createIndex({pk_index}, {{unique: true}})")
-        
-        # Create indexes for unique fields
-        unique_fields = [f for f in ent.get("fields", []) if f.get("unique")]
-        for field in unique_fields:
-            if not field.get("primary_key"):  # Don't duplicate primary key indexes
-                unique_index = {field["name"]: 1}
-                scripts.append(f"db.{cname}.createIndex({unique_index}, {{unique: true}})")
-        
-        # Create indexes for foreign key fields (for better query performance)
-        fk_fields = [f for f in ent.get("fields", []) if f.get("foreign_key")]
-        for field in fk_fields:
-            fk_index = {field["name"]: 1}
-            scripts.append(f"db.{cname}.createIndex({fk_index})")
-        
-        # Create indexes from explicit indexes array (if any)
-        for idx in ent.get("indexes", []) or []:
-            fields = idx.get("fields") or []
-            if not fields:
-                continue
-            key_obj = {f.get("field"): (1 if f.get("order", "asc") == "asc" else -1) for f in fields}
-            unique = "true" if idx.get("unique") else "false"
-            scripts.append(
-                f"db.{cname}.createIndex({key_obj}, {{unique: {unique}}})".replace("'", '"')
-            )
-    return scripts
-
-
 def to_postgres_sql(spec: Dict[str, Any]) -> str:
     stmts: List[str] = []
     
@@ -413,7 +373,6 @@ def generate_all(spec: Dict[str, Any]) -> Dict[str, Any]:
     
     result = {
         "json_schema": to_json_schema(spec),
-        "mongo_scripts": to_mongo_scripts(spec),
         "postgres_sql": to_postgres_sql(spec),
         "dynamodb_tables": to_dynamodb_defs(spec),
     }

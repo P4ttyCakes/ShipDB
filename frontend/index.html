@@ -32,7 +32,7 @@
                             <div class="feature">🏥 Healthcare, Finance, Manufacturing, SaaS, Government</div>
                             <div class="feature">📊 Detailed, fool-proof, production-ready databases</div>
                             <div class="feature">🔒 Built-in security, compliance, and monitoring</div>
-                            <div class="feature">⚡ Deploy PostgreSQL, MongoDB, DynamoDB in minutes</div>
+                            <div class="feature">⚡ Deploy PostgreSQL, DynamoDB in minutes</div>
                         </div>
                         <button id="start-btn" class="btn btn-primary">Start New Project</button>
                     </div>
@@ -95,6 +95,9 @@
         async function startProject() {
             const name = document.getElementById('project-name').value;
             const description = document.getElementById('project-description').value;
+            
+            // Store project name globally for deployment
+            window.currentProjectName = name;
             
             try {
                 const response = await fetch('http://localhost:8000/api/projects/new_project/start', {
@@ -205,13 +208,21 @@
                 lastMessage.textContent = `🤖 ${result.prompt}`;
                 
                 if (result.done) {
+                    // Show finish options but don't disable input - allow continued conversation
                     document.getElementById('finish-conversation').style.display = 'block';
                     document.getElementById('generate-schema').style.display = 'block';
-                    document.getElementById('user-input').disabled = true;
-                    document.getElementById('send-answer').disabled = true;
+                    
+                    // Keep input enabled for continued conversation
+                    input.disabled = false;
+                    document.getElementById('send-answer').disabled = false;
                     
                     // Store the spec for schema generation
                     window.currentSpec = result.partial_spec;
+                    
+                    // Add a subtle indicator that the AI thinks it's done
+                    const messages = log.querySelectorAll('.ai-message');
+                    const lastMessage = messages[messages.length - 1];
+                    lastMessage.innerHTML = `🤖 ${result.prompt} <span style="color: #10b981; font-size: 0.9em;">(AI thinks conversation is complete - you can continue or finish)</span>`;
                 } else {
                     // Re-enable input for next question
                     input.disabled = false;
@@ -366,11 +377,6 @@
                     </div>
                     
                     <div class="schema-section">
-                        <h3>🍃 MongoDB Scripts</h3>
-                        <pre><code>${artifacts.mongo_scripts ? artifacts.mongo_scripts.join('\n') : 'No MongoDB scripts'}</code></pre>
-                    </div>
-                    
-                    <div class="schema-section">
                         <h3>⚡ DynamoDB Tables</h3>
                         <pre><code>${JSON.stringify(artifacts.dynamodb_tables, null, 2)}</code></pre>
                     </div>
@@ -380,7 +386,6 @@
                         <p>Your database is ready for deployment to AWS! Choose your preferred database type:</p>
                         <div class="deployment-options">
                             <button onclick="deployDatabase('postgresql')" class="btn btn-primary">Deploy PostgreSQL</button>
-                            <button onclick="deployDatabase('mongodb')" class="btn btn-primary">Deploy MongoDB</button>
                             <button onclick="deployDatabase('dynamodb')" class="btn btn-primary">Deploy DynamoDB</button>
                         </div>
                     </div>
@@ -403,10 +408,17 @@
                 let deploymentRequest;
                 
                 if (dbType === 'dynamodb') {
+                    // Use the actual project name instead of generic name
+                    const projectName = window.currentProjectName || 'shipdb_project';
+                    const sanitizedProjectName = projectName.toLowerCase()
+                        .replace(/[^a-z0-9]/g, '_')
+                        .replace(/_+/g, '_')  // Replace multiple underscores with single underscore
+                        .replace(/^_|_$/g, ''); // Remove leading/trailing underscores
+                    
                     deploymentRequest = {
                         project_id: `project_${Date.now()}`,
                         database_type: 'dynamodb',
-                        database_name: 'shipdb_generated',
+                        database_name: sanitizedProjectName,
                         schema_data: window.currentArtifacts.dynamodb_tables,
                         region: 'us-east-1'
                     };

@@ -11,7 +11,7 @@ export function App() {
         <main id="main-content" class="main-content">
             <div class="welcome-section">
                 <h2>Welcome to ShipDB</h2>
-                <p>Deploy MongoDB, PostgreSQL, or DynamoDB in minutes with AI-powered schema generation.</p>
+                <p>Deploy PostgreSQL or DynamoDB in minutes with AI-powered schema generation.</p>
                 <button id="start-btn" class="btn btn-primary">Start New Project</button>
             </div>
         </main>

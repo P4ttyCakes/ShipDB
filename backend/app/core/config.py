@@ -33,12 +33,6 @@ class Settings(BaseSettings):
     AWS_REGION: str = "us-east-1"
     AWS_DEFAULT_VPC_ID: Optional[str] = None
     
-    # MongoDB Atlas
-    MONGODB_ATLAS_PUBLIC_KEY: Optional[str] = None
-    MONGODB_ATLAS_PRIVATE_KEY: Optional[str] = None
-    MONGODB_ATLAS_PROJECT_ID: Optional[str] = None
-    MONGODB_ATLAS_SERVICE_CLIENT_ID: Optional[str] = None
-    MONGODB_ATLAS_SERVICE_CLIENT_SECRET: Optional[str] = None
     
     # RDS
     RDS_MASTER_USERNAME: Optional[str] = None

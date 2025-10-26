@@ -21,7 +21,7 @@ class ShipDBApp {
             <main id="main-content" class="main-content">
                 <div id="welcome-section" class="welcome-section">
                     <h2>Welcome to ShipDB</h2>
-                    <p>Deploy MongoDB, PostgreSQL, or DynamoDB in minutes with AI-powered schema generation.</p>
+                    <p>Deploy PostgreSQL or DynamoDB in minutes with AI-powered schema generation.</p>
                     <button id="start-btn" class="btn btn-primary">Start New Project</button>
                 </div>
                 
@@ -109,6 +109,9 @@ class ShipDBApp {
         const name = document.getElementById('project-name').value;
         const description = document.getElementById('project-description').value;
 
+        // Store project name globally for deployment
+        window.currentProjectName = name;
+
         try {
             const response = await fetch(`${API_BASE_URL}/api/projects/new_project/start`, {
                 method: 'POST',
@@ -173,9 +176,17 @@ class ShipDBApp {
             log.innerHTML += `<div class="ai-message">🤖 ${result.prompt}</div>`;
             
             if (result.done) {
+                // Show finish options but don't disable input - allow continued conversation
                 document.getElementById('finish-conversation').style.display = 'block';
-                document.getElementById('user-input').disabled = true;
-                document.getElementById('send-answer').disabled = true;
+                
+                // Keep input enabled for continued conversation
+                document.getElementById('user-input').disabled = false;
+                document.getElementById('send-answer').disabled = false;
+                
+                // Add a subtle indicator that the AI thinks it's done
+                const messages = log.querySelectorAll('.ai-message');
+                const lastMessage = messages[messages.length - 1];
+                lastMessage.innerHTML = `🤖 ${result.prompt} <span style="color: #10b981; font-size: 0.9em;">(AI thinks conversation is complete - you can continue or finish)</span>`;
             }
             
             // Scroll to bottom
@@ -246,11 +257,6 @@ class ShipDBApp {
             <div class="schema-section">
                 <h3>📋 JSON Schema</h3>
                 <pre><code>${JSON.stringify(artifacts.json_schema, null, 2)}</code></pre>
-            </div>
-            
-            <div class="schema-section">
-                <h3>🍃 MongoDB Scripts</h3>
-                <pre><code>${artifacts.mongo_scripts ? artifacts.mongo_scripts.join('\n') : 'No MongoDB scripts'}</code></pre>
             </div>
             
             <div class="schema-section">

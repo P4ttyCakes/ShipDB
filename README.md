@@ -57,8 +57,8 @@ ShipDB understands and creates perfect databases for **EVERY** business sector:
   - Compliance frameworks (GDPR, HIPAA, PCI-DSS, SOX)
   - Audit logging and change tracking
 
-- **⚡ Multi-Database Support**: PostgreSQL, MongoDB, DynamoDB
-- **☁️ Cloud Deployment**: Automatic AWS deployment (RDS, DocumentDB, DynamoDB)
+- **⚡ Multi-Database Support**: PostgreSQL, DynamoDB
+- **☁️ Cloud Deployment**: Automatic AWS deployment (RDS, DynamoDB)
 - **📈 Schema Visualization**: ERD diagrams for visual schema review
 - **📋 Export Options**: Download SQL scripts, JSON schemas, and connection info
 

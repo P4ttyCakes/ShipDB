@@ -4,7 +4,6 @@ from enum import Enum
 
 
 class DatabaseType(str, Enum):
-    MONGODB = "mongodb"
     POSTGRESQL = "postgresql"
     DYNAMODB = "dynamodb"
 

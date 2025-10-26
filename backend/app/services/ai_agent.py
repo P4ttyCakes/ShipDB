@@ -127,7 +127,7 @@ class AIAgentService:
             "\n\n"
             "When done=true, partial_spec must be a COMPLETE database specification with: "
             "- app_type: string describing the application "
-            "- db_type: 'postgresql', 'mongodb', or 'dynamodb' "
+            "- db_type: 'postgresql' or 'dynamodb' "
             "- entities: array of objects with 'name' and 'fields' "
             "- Each field must have: name, type, required (boolean), and appropriate constraints "
             "- MANDATORY: Each entity MUST have an 'id' field with primary_key: true "
@@ -136,6 +136,15 @@ class AIAgentService:
             "- Include primary keys, foreign keys, indexes, and relationships "
             "- CRITICAL: Generate at least 3-5 entities for a complete system "
             "- CRITICAL: Each entity must have at least 3-5 fields "
+            "\n\n"
+            "SCHEMA UPDATE RULES (when continuing conversations): "
+            "- When user requests changes AFTER you've marked done=true, provide UPDATED entities "
+            "- Include ALL existing entities PLUS any new/modified entities "
+            "- If adding new features (e.g., 'stories' to social media), add new entities "
+            "- If modifying existing entities, include the updated version "
+            "- NEVER provide empty entities array - always include complete schema "
+            "- Example: If user says 'add stories feature', include stories entity + all existing entities "
+            "- Example: If user says 'add admin role to users', update users entity with admin fields "
             "\n\n"
             "RELATIONSHIP DESIGN RULES: "
             "- ONE-TO-MANY: Use foreign keys (e.g., order_id in payments table) "
@@ -223,11 +232,53 @@ class AIAgentService:
     def _merge_partial(self, base: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
         """Recursively merge an incoming partial spec into the accumulated base spec."""
         for k, v in incoming.items():
-            if isinstance(v, dict) and isinstance(base.get(k), dict):
+            if k == "entities" and isinstance(v, list) and isinstance(base.get(k), list):
+                # Special handling for entities - merge intelligently
+                base[k] = self._merge_entities(base[k], v)
+            elif isinstance(v, dict) and isinstance(base.get(k), dict):
                 base[k] = self._merge_partial(base[k], v)
             else:
                 base[k] = v
         return base
+    
+    def _merge_entities(self, base_entities: List[Dict[str, Any]], incoming_entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Intelligently merge entity lists, updating existing entities and adding new ones."""
+        # Create a map of existing entities by name
+        entity_map = {entity["name"]: entity for entity in base_entities}
+        
+        # Process incoming entities
+        for incoming_entity in incoming_entities:
+            entity_name = incoming_entity.get("name")
+            if entity_name in entity_map:
+                # Update existing entity - merge fields intelligently
+                existing_entity = entity_map[entity_name]
+                existing_entity.update(incoming_entity)  # Update all fields
+                
+                # Merge fields if both have fields
+                if "fields" in incoming_entity and "fields" in existing_entity:
+                    existing_entity["fields"] = self._merge_fields(existing_entity["fields"], incoming_entity["fields"])
+            else:
+                # Add new entity
+                entity_map[entity_name] = incoming_entity
+        
+        return list(entity_map.values())
+    
+    def _merge_fields(self, base_fields: List[Dict[str, Any]], incoming_fields: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Intelligently merge field lists, updating existing fields and adding new ones."""
+        # Create a map of existing fields by name
+        field_map = {field["name"]: field for field in base_fields}
+        
+        # Process incoming fields
+        for incoming_field in incoming_fields:
+            field_name = incoming_field.get("name")
+            if field_name in field_map:
+                # Update existing field
+                field_map[field_name].update(incoming_field)
+            else:
+                # Add new field
+                field_map[field_name] = incoming_field
+        
+        return list(field_map.values())
 
     def _validate_complete_spec(self, spec: Dict[str, Any]) -> bool:
         """Validate that a spec is complete enough for schema generation."""
@@ -239,7 +290,7 @@ class AIAgentService:
             return False
             
         # Must have db_type
-        if spec.get("db_type") not in ["postgresql", "mongodb", "dynamodb"]:
+        if spec.get("db_type") not in ["postgresql", "dynamodb"]:
             return False
             
         # Must have entities
@@ -293,9 +344,9 @@ class AIAgentService:
                     model=self._model_name,
                     system=system_txt,
                     messages=msgs,
-                    max_tokens=4000,  # Significantly increased to allow for complete JSON responses
+                    max_tokens=4000,
                     temperature=0.0,
-                    timeout=30.0,  # 30 second timeout
+                    timeout=30.0,
                 )
                 
                 # Concatenate text from content blocks
@@ -307,218 +358,15 @@ class AIAgentService:
                 text = "".join(text_parts)
                 
                 # Log the raw response for debugging
-                logger.debug(f"Raw AI response: {text[:200]}...")
+                logger.debug(f"Raw AI response: {text[:500]}...")
                 
-                # Try direct JSON parsing
-                try:
-                    obj = json.loads(text.strip())
-                    if isinstance(obj, dict) and "next_question" in obj:
-                        logger.debug("Direct JSON parsing succeeded")
-                        return obj
-                except json.JSONDecodeError as e:
-                    logger.debug(f"Direct JSON parsing failed: {e}")
-                
-                # Try to extract JSON block from text (more aggressive)
-                start = text.find("{")
-                end = text.rfind("}")
-                if start != -1 and end != -1 and end > start:
-                    json_text = text[start : end + 1]
-                    try:
-                        obj = json.loads(json_text)
-                        if isinstance(obj, dict) and "next_question" in obj:
-                            logger.debug("Extracted JSON parsing succeeded")
-                            return obj
-                    except json.JSONDecodeError as e:
-                        logger.debug(f"Extracted JSON parsing failed: {e}")
-                
-                # Try to extract JSON with newline handling
-                lines = text.split('\n')
-                for line in lines:
-                    if line.strip().startswith('{'):
-                        try:
-                            obj = json.loads(line.strip())
-                            if isinstance(obj, dict) and "next_question" in obj:
-                                logger.debug("Line-based JSON parsing succeeded")
-                                return obj
-                        except json.JSONDecodeError:
-                            continue
-                
-                # Try to fix common JSON issues
-                try:
-                    # Remove any text before/after JSON
-                    lines = text.split('\n')
-                    json_lines = []
-                    in_json = False
-                    for line in lines:
-                        if line.strip().startswith('{'):
-                            in_json = True
-                        if in_json:
-                            json_lines.append(line)
-                        if line.strip().endswith('}') and in_json:
-                            break
-                    
-                    if json_lines:
-                        json_text = '\n'.join(json_lines)
-                        obj = json.loads(json_text)
-                        if isinstance(obj, dict) and "next_question" in obj:
-                            return obj
-                except json.JSONDecodeError as e:
-                    logger.debug(f"Fixed JSON parsing failed: {e}")
-                
-                # Try to fix common JSON issues (single quotes, True/False, etc.)
-                try:
-                    # Remove newlines and control characters, fix common issues
-                    fixed_text = text.replace('\n', '').replace('\r', '').replace('\t', ' ')
-                    fixed_text = fixed_text.replace("'", '"').replace('True', 'true').replace('False', 'false').replace('None', 'null')
-                    # Remove any text before the first { and after the last }
-                    start_idx = fixed_text.find('{')
-                    end_idx = fixed_text.rfind('}')
-                    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                        fixed_text = fixed_text[start_idx:end_idx + 1]
-                    obj = json.loads(fixed_text)
-                    if isinstance(obj, dict) and "next_question" in obj:
-                        logger.debug("Fixed JSON parsing succeeded")
-                        return obj
-                except json.JSONDecodeError as e:
-                    logger.debug(f"Fixed JSON parsing failed: {e}")
-                
-                # Try regex-based JSON extraction for complex cases
-                try:
-                    import re
-                    # Find JSON object with more flexible pattern
-                    json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
-                    matches = re.findall(json_pattern, text, re.DOTALL)
-                    for match in matches:
-                        try:
-                            # Clean up the match
-                            cleaned = match.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
-                            cleaned = cleaned.replace("'", '"').replace('True', 'true').replace('False', 'false').replace('None', 'null')
-                            obj = json.loads(cleaned)
-                            if isinstance(obj, dict) and "next_question" in obj:
-                                logger.debug("Regex JSON parsing succeeded")
-                                return obj
-                        except json.JSONDecodeError:
-                            continue
-                except Exception as e:
-                    logger.debug(f"Regex JSON parsing failed: {e}")
-                
-                # Try to reconstruct JSON from partial matches
-                try:
-                    # Find all potential JSON fragments
-                    fragments = []
-                    in_json = False
-                    brace_count = 0
-                    current_fragment = ""
-                    
-                    for char in text:
-                        if char == '{':
-                            if not in_json:
-                                in_json = True
-                                current_fragment = ""
-                            current_fragment += char
-                            brace_count += 1
-                        elif char == '}' and in_json:
-                            current_fragment += char
-                            brace_count -= 1
-                            if brace_count == 0:
-                                fragments.append(current_fragment)
-                                in_json = False
-                        elif in_json:
-                            current_fragment += char
-                    
-                    # Try each fragment
-                    for fragment in fragments:
-                        try:
-                            cleaned = fragment.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
-                            cleaned = cleaned.replace("'", '"').replace('True', 'true').replace('False', 'false').replace('None', 'null')
-                            obj = json.loads(cleaned)
-                            if isinstance(obj, dict) and "next_question" in obj:
-                                logger.debug("Fragment JSON parsing succeeded")
-                                return obj
-                        except json.JSONDecodeError:
-                            continue
-                except Exception as e:
-                    logger.debug(f"Fragment JSON parsing failed: {e}")
-                
-                # Try to fix malformed JSON with common issues
-                try:
-                    import re
-                    # Handle common JSON malformations
-                    fixed_text = text
-                    
-                    # Fix unescaped quotes in strings
-                    fixed_text = re.sub(r'(?<!\\)"(?![,}\s])', r'\\"', fixed_text)
-                    
-                    # Fix missing commas
-                    fixed_text = re.sub(r'}\s*{', '},{', fixed_text)
-                    fixed_text = re.sub(r']\s*\[', '],[', fixed_text)
-                    
-                    # Fix trailing commas
-                    fixed_text = re.sub(r',\s*}', '}', fixed_text)
-                    fixed_text = re.sub(r',\s*]', ']', fixed_text)
-                    
-                    # Extract JSON from fixed text
-                    start_idx = fixed_text.find('{')
-                    end_idx = fixed_text.rfind('}')
-                    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                        json_text = fixed_text[start_idx:end_idx + 1]
-                        obj = json.loads(json_text)
-                        if isinstance(obj, dict) and "next_question" in obj:
-                            logger.debug("Malformed JSON fix succeeded")
-                            return obj
-                except Exception as e:
-                    logger.debug(f"Malformed JSON fix failed: {e}")
-                
-                # If all JSON parsing fails, create a context-aware fallback response
-                logger.warning(f"Could not parse AI response as JSON, creating fallback. Response: {text[:100]}...")
-                
-                # Create a fallback response based on conversation context
-                conversation_rounds = len([msg for msg in history if msg.get("role") == "user"])
-                
-                # Extract project context from conversation history
-                project_context = ""
-                for msg in history:
-                    if msg.get("role") == "user" and msg.get("content"):
-                        project_context += msg.get("content", "") + " "
-                
-                if conversation_rounds >= 3:
-                    # If we've had enough conversation, try to complete with context
-                    app_type = "Database application"
-                    if "healthcare" in project_context.lower() or "medical" in project_context.lower():
-                        app_type = "Healthcare Management System"
-                    elif "stock" in project_context.lower() or "trading" in project_context.lower():
-                        app_type = "Stock Trading Platform"
-                    elif "real estate" in project_context.lower() or "property" in project_context.lower():
-                        app_type = "Real Estate Platform"
-                    elif "ecommerce" in project_context.lower() or "store" in project_context.lower():
-                        app_type = "E-commerce Platform"
-                    
-                    return {
-                        "next_question": "Perfect! I have enough information to create your database design.",
-                        "done": True,
-                        "partial_spec": {
-                            "app_type": app_type,
-                            "db_type": "postgresql",
-                            "entities": []
-                        }
-                    }
+                # Parse JSON from AI response
+                obj = self._parse_json_response(text)
+                if obj and isinstance(obj, dict) and "next_question" in obj:
+                    return obj
                 else:
-                    # Continue the conversation with context-aware questions
-                    context_question = "What are the main features you want this system to have?"
-                    if "healthcare" in project_context.lower():
-                        context_question = "What type of healthcare practice is this for?"
-                    elif "stock" in project_context.lower():
-                        context_question = "What types of financial instruments will users trade?"
-                    elif "real estate" in project_context.lower():
-                        context_question = "What types of properties will you list?"
-                    elif "ecommerce" in project_context.lower():
-                        context_question = "What product categories will you sell?"
-                    
-                    return {
-                        "next_question": context_question,
-                        "done": False,
-                        "partial_spec": {}
-                    }
+                    logger.error(f"AI response missing required fields: {obj}")
+                    raise ValueError("AI response is missing required 'next_question' field")
                 
             except Exception as e:
                 sleep_s = base_sleep * (2 ** attempt)
@@ -529,186 +377,79 @@ class AIAgentService:
                     time.sleep(sleep_s)
                     continue
 
-        # Final fallback if all retries fail
-        logger.error("All Claude retries failed, using emergency fallback")
-        conversation_rounds = len([msg for msg in history if msg.get("role") == "user"])
+        # All retries failed
+        logger.error("All Claude retries failed")
+        raise RuntimeError("AI service unavailable after multiple retries. Please try again later.")
+    
+    def _parse_json_response(self, text: str) -> Optional[Dict[str, Any]]:
+        """Parse JSON from AI response with multiple fallback strategies."""
+        # Strategy 1: Try direct JSON parsing
+        try:
+            obj = json.loads(text.strip())
+            if isinstance(obj, dict):
+                logger.debug("Direct JSON parsing succeeded")
+                return obj
+        except json.JSONDecodeError:
+            pass
         
-        # Extract project context for emergency fallback
-        project_context = ""
-        for msg in history:
-            if msg.get("role") == "user" and msg.get("content"):
-                project_context += msg.get("content", "") + " "
+        # Strategy 2: Extract JSON block (content between first { and last })
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                json_text = text[start : end + 1]
+                obj = json.loads(json_text)
+                if isinstance(obj, dict):
+                    logger.debug("Extracted JSON block parsing succeeded")
+                    return obj
+            except json.JSONDecodeError:
+                pass
         
-        if conversation_rounds >= 2:
-            # Context-aware app type for emergency completion
-            app_type = "Database application"
-            entities = []
-            
-            if "healthcare" in project_context.lower() or "medical" in project_context.lower():
-                app_type = "Healthcare Management System"
-                entities = [
-                    {
-                        "name": "patients",
-                        "fields": [
-                            {"name": "id", "type": "uuid", "required": True},
-                            {"name": "name", "type": "string", "required": True},
-                            {"name": "email", "type": "string", "required": True},
-                            {"name": "phone", "type": "string", "required": False},
-                            {"name": "created_at", "type": "timestamp", "required": True}
-                        ]
-                    },
-                    {
-                        "name": "doctors",
-                        "fields": [
-                            {"name": "id", "type": "uuid", "required": True},
-                            {"name": "name", "type": "string", "required": True},
-                            {"name": "specialty", "type": "string", "required": True},
-                            {"name": "email", "type": "string", "required": True},
-                            {"name": "created_at", "type": "timestamp", "required": True}
-                        ]
-                    },
-                    {
-                        "name": "appointments",
-                        "fields": [
-                            {"name": "id", "type": "uuid", "required": True},
-                            {"name": "patient_id", "type": "uuid", "required": True},
-                            {"name": "doctor_id", "type": "uuid", "required": True},
-                            {"name": "appointment_date", "type": "timestamp", "required": True},
-                            {"name": "status", "type": "string", "required": True}
-                        ]
-                    }
-                ]
-            elif "stock" in project_context.lower() or "trading" in project_context.lower():
-                app_type = "Stock Trading Platform"
-                entities = [
-                    {
-                        "name": "users",
-                        "fields": [
-                            {"name": "id", "type": "uuid", "required": True},
-                            {"name": "email", "type": "string", "required": True},
-                            {"name": "name", "type": "string", "required": True},
-                            {"name": "account_balance", "type": "decimal", "required": False},
-                            {"name": "created_at", "type": "timestamp", "required": True}
-                        ]
-                    },
-                    {
-                        "name": "stocks",
-                        "fields": [
-                            {"name": "id", "type": "uuid", "required": True},
-                            {"name": "symbol", "type": "string", "required": True},
-                            {"name": "company_name", "type": "string", "required": True},
-                            {"name": "current_price", "type": "decimal", "required": True},
-                            {"name": "last_updated", "type": "timestamp", "required": True}
-                        ]
-                    },
-                    {
-                        "name": "transactions",
-                        "fields": [
-                            {"name": "id", "type": "uuid", "required": True},
-                            {"name": "user_id", "type": "uuid", "required": True},
-                            {"name": "stock_id", "type": "uuid", "required": True},
-                            {"name": "transaction_type", "type": "string", "required": True},
-                            {"name": "quantity", "type": "integer", "required": True},
-                            {"name": "price", "type": "decimal", "required": True}
-                        ]
-                    }
-                ]
-            elif "real estate" in project_context.lower() or "property" in project_context.lower():
-                app_type = "Real Estate Platform"
-                entities = [
-                    {
-                        "name": "users",
-                        "fields": [
-                            {"name": "id", "type": "uuid", "required": True},
-                            {"name": "email", "type": "string", "required": True},
-                            {"name": "name", "type": "string", "required": True},
-                            {"name": "phone", "type": "string", "required": False},
-                            {"name": "created_at", "type": "timestamp", "required": True}
-                        ]
-                    },
-                    {
-                        "name": "properties",
-                        "fields": [
-                            {"name": "id", "type": "uuid", "required": True},
-                            {"name": "title", "type": "string", "required": True},
-                            {"name": "description", "type": "text", "required": False},
-                            {"name": "price", "type": "decimal", "required": True},
-                            {"name": "address", "type": "string", "required": True},
-                            {"name": "owner_id", "type": "uuid", "required": True}
-                        ]
-                    },
-                    {
-                        "name": "favorites",
-                        "fields": [
-                            {"name": "id", "type": "uuid", "required": True},
-                            {"name": "user_id", "type": "uuid", "required": True},
-                            {"name": "property_id", "type": "uuid", "required": True},
-                            {"name": "created_at", "type": "timestamp", "required": True}
-                        ]
-                    }
-                ]
-            elif "ecommerce" in project_context.lower() or "store" in project_context.lower():
-                app_type = "E-commerce Platform"
-                entities = [
-                    {
-                        "name": "users",
-                        "fields": [
-                            {"name": "id", "type": "uuid", "required": True},
-                            {"name": "email", "type": "string", "required": True},
-                            {"name": "name", "type": "string", "required": True},
-                            {"name": "phone", "type": "string", "required": False},
-                            {"name": "created_at", "type": "timestamp", "required": True}
-                        ]
-                    },
-                    {
-                        "name": "products",
-                        "fields": [
-                            {"name": "id", "type": "uuid", "required": True},
-                            {"name": "name", "type": "string", "required": True},
-                            {"name": "description", "type": "text", "required": False},
-                            {"name": "price", "type": "decimal", "required": True},
-                            {"name": "inventory_count", "type": "integer", "required": True},
-                            {"name": "created_at", "type": "timestamp", "required": True}
-                        ]
-                    },
-                    {
-                        "name": "orders",
-                        "fields": [
-                            {"name": "id", "type": "uuid", "required": True},
-                            {"name": "user_id", "type": "uuid", "required": True},
-                            {"name": "total_amount", "type": "decimal", "required": True},
-                            {"name": "status", "type": "string", "required": True},
-                            {"name": "order_date", "type": "timestamp", "required": True}
-                        ]
-                    }
-                ]
-            
-            return {
-                "next_question": "Perfect! I have enough information to create your database design.",
-                "done": True,
-                "partial_spec": {
-                    "app_type": app_type,
-                    "db_type": "postgresql",
-                    "entities": entities
-                }
-            }
-        else:
-            # Context-aware questions for emergency continuation
-            context_question = "What are the main features you want this system to have?"
-            if "healthcare" in project_context.lower():
-                context_question = "What type of healthcare practice is this for?"
-            elif "stock" in project_context.lower():
-                context_question = "What types of financial instruments will users trade?"
-            elif "real estate" in project_context.lower():
-                context_question = "What types of properties will you list?"
-            elif "ecommerce" in project_context.lower():
-                context_question = "What product categories will you sell?"
-            
-            return {
-                "next_question": context_question,
-                "done": False,
-                "partial_spec": {}
-            }
+        # Strategy 3: Clean up text and try again
+        try:
+            import re
+            # Remove control characters
+            cleaned = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', text)
+            # Collapse whitespace to single spaces
+            cleaned = re.sub(r'\s+', ' ', cleaned)
+            # Fix common JSON issues
+            cleaned = cleaned.replace("'", '"').replace('True', 'true').replace('False', 'false').replace('None', 'null')
+            # Extract JSON block again
+            start = cleaned.find("{")
+            end = cleaned.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                json_text = cleaned[start : end + 1]
+                obj = json.loads(json_text)
+                if isinstance(obj, dict):
+                    logger.debug("Cleaned JSON parsing succeeded")
+                    return obj
+        except (json.JSONDecodeError, Exception) as e:
+            logger.debug(f"Cleaned JSON parsing failed: {e}")
+        
+        # Strategy 4: Try to find valid JSON fragments
+        try:
+            import re
+            # Find all potential JSON objects
+            json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+            matches = re.findall(json_pattern, text, re.DOTALL)
+            for match in matches:
+                try:
+                    # Clean the match
+                    cleaned = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', match)
+                    cleaned = re.sub(r'\s+', ' ', cleaned)
+                    cleaned = cleaned.replace("'", '"').replace('True', 'true').replace('False', 'false').replace('None', 'null')
+                    obj = json.loads(cleaned)
+                    if isinstance(obj, dict):
+                        logger.debug("Fragment JSON parsing succeeded")
+                        return obj
+                except json.JSONDecodeError:
+                    continue
+        except Exception as e:
+            logger.debug(f"Fragment JSON parsing failed: {e}")
+        
+        # All strategies failed
+        logger.error(f"Could not parse AI response as valid JSON. Response preview: {text[:500]}")
+        return None
 
     def start_session(self, name: str, description: Optional[str] = None) -> Dict[str, Any]:
         """Create a new chat session and return the first question to ask the user."""
