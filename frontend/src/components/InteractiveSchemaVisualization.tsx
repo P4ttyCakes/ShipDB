@@ -980,6 +980,9 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
 
   return (
     <div className="h-full w-full relative overflow-hidden" style={{ minWidth: 0 }}>
+      <style>
+        {`.react-flow__attribution { display: none !important; }`}
+      </style>
       {/* Add Table Button */}
       <button
         onClick={addNewTable}
@@ -1020,9 +1023,10 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
           animated: false,
           type: 'straight',
         }}
+        proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={25} size={1} />
-        <Controls className="bg-card border border-border rounded-lg shadow-lg" />
+        <Controls className="bg-card border border-border rounded-lg shadow-lg [&_button]:bg-blue-600 [&_button:hover]:bg-blue-700 [&_button]:text-white [&_button_svg]:text-white" />
       </ReactFlow>
     </div>
   );
