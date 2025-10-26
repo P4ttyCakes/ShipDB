@@ -2,15 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-try:
-    from app.core.config import settings  # when run from backend/
-except ImportError:  # when run from repo root
-    from backend.app.core.config import settings
-
-try:
-    from app.api.routes import projects, schema, deploy, visualization
-except ImportError:
-    from backend.app.api.routes import projects, schema, deploy, visualization
+from app.core.config import settings
+from app.api.routes import projects, schema, deploy, visualization
 
 # Initialize FastAPI app
 app = FastAPI(

@@ -1,196 +1,73 @@
-# 🚢 ShipDB - Universal Database Architect
+# Welcome to your Lovable project
 
-**ShipDB** is a WORLD-CLASS database architect that creates DETAILED, FOOL-PROOF, DEPLOYABLE databases for ANY business sector. From simple startups to enterprise platforms, ShipDB eliminates ALL database complexity while providing the RIGHT level of sophistication for your needs.
+## Project info
 
-## 🎯 Universal Business Support
+**URL**: https://lovable.dev/projects/aff896ea-37ef-4140-b95d-e022eb83177f
 
-ShipDB understands and creates perfect databases for **EVERY** business sector:
+## How can I edit this code?
 
-- **🏥 Healthcare & Medical** - HIPAA compliance, patient records, appointments
-- **💰 Finance & Banking** - PCI compliance, transactions, security
-- **🏭 Manufacturing & Supply Chain** - Inventory, suppliers, quality control
-- **🛒 E-commerce & Retail** - Products, orders, payments, inventory
-- **🏠 Real Estate & Property** - Listings, agents, transactions
-- **🎓 Education & Learning** - Students, courses, assessments
-- **🎬 Media & Entertainment** - Content, subscriptions, analytics
-- **💼 Professional Services** - Clients, projects, billing
-- **🏛️ Government & Public Sector** - Citizens, services, compliance
-- **💻 SaaS & Technology** - Multi-tenancy, subscriptions, APIs
-- **🏨 Hospitality & Tourism** - Bookings, guests, services
-- **🌾 Agriculture & Food** - Crops, suppliers, traceability
-- **🚚 Transportation & Logistics** - Vehicles, routes, tracking
-- **⚡ Energy & Utilities** - Customers, usage, billing
-- **⚖️ Legal & Law** - Cases, clients, documents
-- **📈 Marketing & Advertising** - Campaigns, leads, ROI
-- **👥 Human Resources** - Employees, payroll, performance
-- **And ANY other business sector or use case!**
+There are several ways of editing your application.
 
-## ✨ Enhanced Features
+**Use Lovable**
 
-- **🤖 AI-Powered Universal Design**: Adapts to ANY business type and size
-- **📊 Comprehensive Database Features**: 
-  - Complete CRUD operations with proper relationships
-  - User management and authentication
-  - Audit trails and change tracking
-  - Soft deletes and data retention
-  - Performance indexes and query optimization
-  - Data validation and constraints
-  - Backup and recovery strategies
-  - Security and encryption (field-level when needed)
-  - Compliance features (GDPR, HIPAA, SOX, PCI-DSS)
-  - Real-time features when required
-  - Analytics and reporting capabilities
-  - Integration points for external systems
+Simply visit the [Lovable Project](https://lovable.dev/projects/aff896ea-37ef-4140-b95d-e022eb83177f) and start prompting.
 
-- **🏗️ Enterprise Architecture**: 
-  - Hybrid database architectures
-  - Redis caching strategies
-  - Elasticsearch search integration
-  - Performance monitoring and alerting
-  - Horizontal and vertical scaling
-  - Multi-region deployment support
+Changes made via Lovable will be committed automatically to this repo.
 
-- **🔒 Security & Compliance**: 
-  - Field-level encryption
-  - Role-based access control
-  - API rate limiting
-  - Compliance frameworks (GDPR, HIPAA, PCI-DSS, SOX)
-  - Audit logging and change tracking
+**Use your preferred IDE**
 
-- **⚡ Multi-Database Support**: PostgreSQL, DynamoDB
-- **☁️ Cloud Deployment**: Automatic AWS deployment (RDS, DynamoDB)
-- **📈 Schema Visualization**: ERD diagrams for visual schema review
-- **📋 Export Options**: Download SQL scripts, JSON schemas, and connection info
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
 
-## 🛠 Tech Stack
+The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
-### Backend
-- **FastAPI** (Python) - High-performance async API
-- **GPT-5 via OpenAI** - AI agent for requirements gathering
-- **Boto3** - AWS infrastructure management
-- **PyMongo, SQLAlchemy, psycopg2** - Database drivers
+Follow these steps:
 
-### Frontend
-- **HTML/CSS/JavaScript** (Lovable-friendly)
-- **Vanilla JS** - No framework dependencies
+```sh
+# Step 1: Clone the repository using the project's Git URL.
+git clone <YOUR_GIT_URL>
 
-## 📁 Project Structure
+# Step 2: Navigate to the project directory.
+cd <YOUR_PROJECT_NAME>
 
-```
-ShipDB/
-├── backend/              # FastAPI application
-│   ├── app/
-│   │   ├── api/routes/   # API endpoints
-│   │   ├── services/     # Business logic
-│   │   ├── models/       # Pydantic models
-│   │   └── utils/        # Helper functions
-│   └── tests/            # Test suite
-│
-├── frontend/             # Lovable HTML/CSS/JS
-│   ├── src/
-│   │   ├── components/   # UI components
-│   │   ├── api/          # API client
-│   │   └── styles/       # CSS
-│   └── index.html
-│
-└── docs/                 # Documentation
+# Step 3: Install the necessary dependencies.
+npm i
+
+# Step 4: Start the development server with auto-reloading and an instant preview.
+npm run dev
 ```
 
-## 🚀 Quick Start
+**Edit a file directly in GitHub**
 
-### Prerequisites
+- Navigate to the desired file(s).
+- Click the "Edit" button (pencil icon) at the top right of the file view.
+- Make your changes and commit the changes.
 
-- Python 3.10+
-- AWS Account with credentials configured
-- OpenAI API key (or Anthropic/Gemini API key)
+**Use GitHub Codespaces**
 
-### Installation
+- Navigate to the main page of your repository.
+- Click on the "Code" button (green button) near the top right.
+- Select the "Codespaces" tab.
+- Click on "New codespace" to launch a new Codespace environment.
+- Edit files directly within the Codespace and commit and push your changes once you're done.
 
-```bash
-# Clone the repository
-git clone https://github.com/P4ttyCakes/ShipDB.git
-cd ShipDB
+## What technologies are used for this project?
 
-# Create environment file
-# See CONFIGURATION.md for detailed setup instructions
-# You'll need to create a .env file with your API keys
+This project is built with:
 
-# Verify setup (optional)
-./verify_setup.sh
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
 
-# Start the application
-./start_backend.sh    # In one terminal
-./start_frontend.sh   # In another terminal
+## How can I deploy this project?
 
-# Test the API (optional, after starting backend)
-python3 test_api.py
-```
+Simply open [Lovable](https://lovable.dev/projects/aff896ea-37ef-4140-b95d-e022eb83177f) and click on Share -> Publish.
 
-### Manual Setup (Alternative)
+## Can I connect a custom domain to my Lovable project?
 
-```bash
-# Backend setup
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
+Yes, you can!
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your API keys
+To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
-# Start backend
-uvicorn app.main:app --reload
-```
-
-### Frontend
-
-Open `frontend/index.html` in your browser or use a local server:
-
-```bash
-cd frontend
-python -m http.server 8001
-# Open http://localhost:8001
-```
-
-## 📖 Usage
-
-1. **Start a Project**: Click "New Project" on the frontend
-2. **Answer Questions**: Chat with the AI about your database needs
-3. **Review Schema**: View generated schema and ERD diagram
-4. **Deploy**: Click deploy to create your AWS database
-5. **Connect**: Copy connection info and start coding!
-
-## 🔧 Configuration
-
-See [CONFIGURATION.md](CONFIGURATION.md) for detailed setup instructions including:
-- API key setup for OpenAI, Anthropic, and Gemini
-- AWS credentials configuration
-- Environment variable reference
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-1. **Backend won't start**: Make sure you have Python 3.10+ and all dependencies installed
-2. **Import errors**: Run `./verify_setup.sh` to check your setup
-3. **API errors**: Ensure your `.env` file has the correct API keys
-4. **Frontend not loading**: Make sure you're running the frontend server on port 8001
-
-### Getting Help
-
-- Check the API documentation at `http://localhost:8000/docs` when the backend is running
-- Run `./verify_setup.sh` to diagnose setup issues
-- Run `python3 test_api.py` to test API endpoints
-
-## 🤝 Contributing
-
-This is a hackathon MVP. Pull requests welcome!
-
-## 📄 License
-
-MIT
-
-## 🙏 Acknowledgments
-
-Built with love for rapid prototyping and developer productivity.
+Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
