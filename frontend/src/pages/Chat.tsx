@@ -40,6 +40,7 @@ const Chat = () => {
   const [isDeploying, setIsDeploying] = useState(false);
   const [databaseName, setDatabaseName] = useState("");
   const [deploymentType, setDeploymentType] = useState<'dynamodb' | 'supabase'>('dynamodb');
+  const [selectedDeployment, setSelectedDeployment] = useState<'nosql' | 'postgresql' | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chartDBViewerRef = useRef<ChartDBViewerRef>(null);
 
@@ -337,6 +338,7 @@ const Chat = () => {
               </div>
             </Button>
           )}
+          
           <div className="flex gap-3">
             <Input
               value={input}
@@ -373,63 +375,39 @@ const Chat = () => {
 
       {/* Right Side - ChartDB Visualization */}
       <div 
-        className="flex flex-col p-6 overflow-hidden"
-        style={{ width: `${100 - leftWidth}%` }}
+        className="flex flex-col p-6 overflow-hidden flex-1"
+        style={{ width: `${100 - leftWidth}%`, minWidth: 0 }}
       >
         {generatedSchema ? (
-          <div className="flex-1 flex flex-col overflow-hidden space-y-4">
-            {/* Schema Info & Deploy Buttons */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div 
-                  className="bg-card border border-border/50 rounded-lg p-4 cursor-pointer hover:border-primary/50 transition-colors group flex-1"
-                  onClick={() => setShowSchemaModal(true)}
+          <div className="flex-1 flex flex-col overflow-hidden space-y-3">
+            {/* Schema Info - Compact */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+                onClick={() => setShowSchemaModal(true)}
+              >
+                <Maximize2 className="h-4 w-4" />
+                <span className="text-xs">Schema</span>
+                <span className="text-xs text-muted-foreground">({generatedSchema.entities?.length || 0})</span>
+              </Button>
+              
+              {/* Deploy Button - Next to Schema */}
+              {(generatedSchema.dynamodb_tables?.length > 0 || generatedSchema.postgres_sql) && (
+                <Button
+                  onClick={() => setShowDeployDialog(true)}
+                  className="bg-gradient-to-r from-primary to-accent hover:opacity-90"
+                  size="sm"
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-semibold">Generated Schema</h3>
-                    <Maximize2 className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                  </div>
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p><span className="font-medium">App Type:</span> {generatedSchema.app_type || 'N/A'}</p>
-                    <p><span className="font-medium">Entities:</span> {generatedSchema.entities?.length || 0}</p>
-                  </div>
-                </div>
-                
-                {/* Deploy Buttons */}
-                <div className="flex gap-3">
-                  {generatedSchema.dynamodb_tables && generatedSchema.dynamodb_tables.length > 0 && (
-                    <Button
-                      onClick={() => {
-                        setDeploymentType('dynamodb');
-                        setShowDeployDialog(true);
-                      }}
-                      className="bg-gradient-to-r from-green-600 to-emerald-600 hover:opacity-90"
-                      size="sm"
-                    >
-                      <Rocket className="mr-2 h-4 w-4" />
-                      Deploy DynamoDB
-                    </Button>
-                  )}
-                  
-                  {generatedSchema.postgres_sql && generatedSchema.postgres_sql.trim() && (
-                    <Button
-                      onClick={() => {
-                        setDeploymentType('supabase');
-                        setShowDeployDialog(true);
-                      }}
-                      className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90"
-                      size="sm"
-                    >
-                      <Rocket className="mr-2 h-4 w-4" />
-                      Deploy Supabase
-                    </Button>
-                  )}
-                </div>
-              </div>
+                  <Rocket className="h-4 w-4 mr-2" />
+                  <span className="text-xs">Deploy</span>
+                </Button>
+              )}
             </div>
 
             {/* ChartDB Visualization */}
-            <div className="flex-1 overflow-hidden min-h-[600px]">
+            <div className="flex-1 overflow-hidden relative" style={{ minWidth: 0 }}>
               <ChartDBViewer
                 ref={chartDBViewerRef}
                 projectId={sessionId || "default"}
@@ -546,19 +524,44 @@ const Chat = () => {
       <AlertDialog open={showDeployDialog} onOpenChange={setShowDeployDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {deploymentType === 'dynamodb' ? 'Deploy to AWS DynamoDB' : 'Deploy to Supabase'}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Choose Deployment Type</AlertDialogTitle>
             <AlertDialogDescription>
-              {deploymentType === 'dynamodb' 
-                ? 'Deploy your database schema to AWS DynamoDB. Enter a name for your database.'
-                : 'Deploy your PostgreSQL schema to Supabase. Enter a name for your database.'}
-              <span className="block mt-2 text-sm">
-                Database Type: <strong>{deploymentType === 'dynamodb' ? 'DynamoDB' : 'Supabase PostgreSQL'}</strong>
-              </span>
+              Select how you want to deploy your database
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-4 py-4">
+            {/* Deployment Type Selection */}
+            {generatedSchema && generatedSchema.dynamodb_tables && generatedSchema.postgres_sql && (
+              <div className="space-y-3">
+                <Label>Database Type</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    onClick={() => setDeploymentType('dynamodb')}
+                    variant={deploymentType === 'dynamodb' ? 'default' : 'outline'}
+                    className={`transition-all duration-300 ${
+                      deploymentType === 'dynamodb'
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
+                        : ''
+                    }`}
+                  >
+                    NoSQL (DynamoDB)
+                  </Button>
+                  
+                  <Button
+                    onClick={() => setDeploymentType('supabase')}
+                    variant={deploymentType === 'supabase' ? 'default' : 'outline'}
+                    className={`transition-all duration-300 ${
+                      deploymentType === 'supabase'
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
+                        : ''
+                    }`}
+                  >
+                    PostgreSQL (Supabase)
+                  </Button>
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-2">
               <Label htmlFor="database-name">Database Name</Label>
               <Input
@@ -583,9 +586,7 @@ const Chat = () => {
             <AlertDialogAction
               onClick={handleDeploy}
               disabled={isDeploying || !databaseName.trim()}
-              className={deploymentType === 'dynamodb' 
-                ? "bg-gradient-to-r from-green-600 to-emerald-600" 
-                : "bg-gradient-to-r from-purple-600 to-indigo-600"}
+              className="bg-gradient-to-r from-primary to-accent"
             >
               {isDeploying ? (
                 <>

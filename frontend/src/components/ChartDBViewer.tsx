@@ -83,22 +83,14 @@ export const ChartDBViewer = forwardRef<ChartDBViewerRef, ChartDBViewerProps>(({
   }
 
   return (
-    <div className="h-full w-full flex flex-col">
-      <div className="mb-3 pb-3 border-b">
-        <h3 className="text-lg font-semibold">Database Schema Visualization</h3>
-        <p className="text-sm text-muted-foreground">Interactive ER diagram - drag tables to rearrange</p>
-      </div>
-      
-      <div className="flex-1 overflow-hidden">
+    <div className="h-full w-full flex flex-col" style={{ minWidth: 0 }}>
+      <div className="flex-1 overflow-hidden min-w-0" style={{ minHeight: 0 }}>
         <InteractiveSchemaVisualization schema={schemaData} />
       </div>
 
-      <div className="mt-3 pt-3 border-t text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-        <p className="font-semibold text-foreground mb-1">💡 Use:</p>
-        <p className="inline mr-2">• Drag tables</p>
-        <p className="inline mr-2">• Edit with <Pencil className="inline h-3 w-3 mx-1" /> icon</p>
-        <p className="inline mr-2">• Animated arrows show relationships</p>
-        <p className="inline">• Zoom controls in bottom left</p>
+      <div className="px-2 py-1 border-t text-xs text-muted-foreground bg-muted/50 flex items-center gap-2">
+        <span>💡</span>
+        <span>Drag to move • Edit text • Resize corners • Scroll fields</span>
       </div>
     </div>
   );

@@ -93,39 +93,6 @@ const TableNode = (props: NodeProps) => {
   const width = props.width || 300;
   const height = props.height || 400;
 
-  // Handle resize - call parent's onSizeChange callback
-  const handleResizeStart = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startWidth = width;
-    const startHeight = height;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - startX;
-      const deltaY = e.clientY - startY;
-      
-      let newWidth = startWidth + deltaX;
-      let newHeight = startHeight + deltaY;
-      
-      newWidth = Math.max(250, newWidth);
-      newHeight = Math.max(200, newHeight);
-      
-      // Call the parent's callback to update node size
-      if (data?.onSizeChange) {
-        data.onSizeChange(props.id as string, newWidth, newHeight);
-      }
-    };
-
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
-
   return (
     <div 
       className="rounded-lg shadow-xl relative overflow-hidden"
@@ -138,15 +105,43 @@ const TableNode = (props: NodeProps) => {
         minHeight: 200,
       }}
     >
-      {/* Resize Handle - Bottom Right Corner */}
+      {/* Custom Resize Handle - Bottom Right */}
       <div
-        className="absolute -bottom-1 -right-1 w-4 h-4 cursor-nwse-resize z-10 hover:scale-110 transition-transform"
+        className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-50 bg-blue-500 border-2 border-white rounded-tl-lg hover:bg-blue-600 transition-colors"
         style={{
-          backgroundColor: borderColor,
-          border: '3px solid white',
-          borderRadius: '2px',
+          clipPath: 'polygon(100% 0, 100% 100%, 0 100%)',
         }}
-        onMouseDown={handleResizeStart}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          const startX = e.clientX;
+          const startY = e.clientY;
+          const startWidth = width;
+          const startHeight = height;
+
+          const handleMouseMove = (moveEvent: MouseEvent) => {
+            const deltaX = moveEvent.clientX - startX;
+            const deltaY = moveEvent.clientY - startY;
+            
+            let newWidth = startWidth + deltaX;
+            let newHeight = startHeight + deltaY;
+            
+            newWidth = Math.max(250, Math.min(800, newWidth));
+            newHeight = Math.max(200, Math.min(1200, newHeight));
+            
+            // Call the parent's callback to update node size
+            if (data?.onSizeChange) {
+              data.onSizeChange(props.id as string, newWidth, newHeight);
+            }
+          };
+
+          const handleMouseUp = () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+          };
+
+          document.addEventListener('mousemove', handleMouseMove);
+          document.addEventListener('mouseup', handleMouseUp);
+        }}
       />
       
       <Handle type="source" position={Position.Right} id="right" />
@@ -195,8 +190,8 @@ const TableNode = (props: NodeProps) => {
         </div>
       </div>
       
-      {/* Fields */}
-      <div className="p-2 space-y-1 h-[calc(100%-4rem)] overflow-y-auto">
+      {/* Fields - Always Scrollable */}
+      <div className="p-2 pb-1 space-y-1 h-[calc(100%-6.5rem)] overflow-y-auto overscroll-contain">
         {fields.map((field: any, idx: number) => (
           <div 
             key={idx} 
@@ -259,11 +254,15 @@ const TableNode = (props: NodeProps) => {
             </Button>
           </div>
         ))}
+      </div>
+      
+      {/* Add Field Button - Fixed at Bottom, Outside Scroll Area */}
+      <div className="px-2 pb-1.5 pt-1.5 border-t flex-shrink-0" style={{ borderColor: `${borderColor}40` }}>
         <Button
           size="sm"
           variant="outline"
           onClick={handleAddField}
-          className="w-full h-7 text-xs mt-2"
+          className="w-full h-7 text-xs"
         >
           <Plus className="mr-2 h-3 w-3" />
           Add Field
@@ -498,6 +497,10 @@ export const InteractiveSchemaVisualization = ({ schema }: InteractiveSchemaVisu
         const x = baseX + indexInLevel * spacingX;
         const y = yOffset;
         
+        // Calculate dynamic height based on number of fields
+        const fieldCount = (entity.fields || []).length;
+        const dynamicHeight = Math.max(200, 120 + fieldCount * 32); // Base height + field height
+        
         initialNodes.push({
           id: entity.name,
           type: 'tableNode',
@@ -511,7 +514,7 @@ export const InteractiveSchemaVisualization = ({ schema }: InteractiveSchemaVisu
           draggable: true,
           selectable: true,
           width: 300,
-          height: 400,
+          height: dynamicHeight,
         });
       });
       
@@ -530,6 +533,16 @@ export const InteractiveSchemaVisualization = ({ schema }: InteractiveSchemaVisu
         if (index !== -1) {
           if (change.type === 'position' && change.position) {
             updated[index] = { ...updated[index], position: change.position };
+          } else if (change.type === 'resize' && change.dimensions) {
+            // Handle NodeResizer resize events
+            updated[index] = {
+              ...updated[index],
+              width: change.dimensions.width,
+              height: change.dimensions.height,
+            };
+          } else if (change.type === 'select') {
+            // Handle node selection
+            updated[index] = { ...updated[index], selected: change.selected };
           }
         }
       });
@@ -549,7 +562,7 @@ export const InteractiveSchemaVisualization = ({ schema }: InteractiveSchemaVisu
   }, []);
 
   return (
-    <div className="h-full w-full relative">
+    <div className="h-full w-full relative overflow-hidden" style={{ minWidth: 0 }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -563,6 +576,7 @@ export const InteractiveSchemaVisualization = ({ schema }: InteractiveSchemaVisu
         nodesDraggable={true}
         nodesConnectable={false}
         elementsSelectable={true}
+        panOnScroll={false}
         connectionLineStyle={{ stroke: '#94a3b8', strokeWidth: 1 }}
         defaultEdgeOptions={{
           style: { strokeWidth: 1.5 },
@@ -573,15 +587,6 @@ export const InteractiveSchemaVisualization = ({ schema }: InteractiveSchemaVisu
         <Background variant={BackgroundVariant.Dots} gap={25} size={1} />
         <Controls className="bg-card border border-border rounded-lg shadow-lg" />
       </ReactFlow>
-
-      <div className="absolute bottom-4 left-4 bg-card border border-border rounded-lg p-3 shadow-lg z-10 max-w-sm">
-        <p className="text-xs text-muted-foreground">
-          💡 <strong>Click</strong> table/field names to edit • <strong>Drag</strong> to rearrange • <strong>Resize</strong> corners • <strong>Delete</strong> fields with trash icon
-        </p>
-        <p className="text-xs text-muted-foreground mt-2">
-          Colored borders indicate tables that share common entities • Bold arrows show important relationships
-        </p>
-      </div>
     </div>
   );
 };
