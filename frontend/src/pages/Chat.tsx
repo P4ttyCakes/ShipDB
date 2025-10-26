@@ -38,6 +38,7 @@ const Chat = () => {
   const [showDeployDialog, setShowDeployDialog] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
   const [databaseName, setDatabaseName] = useState("");
+  const [deploymentType, setDeploymentType] = useState<'dynamodb' | 'supabase'>('dynamodb');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -192,21 +193,39 @@ const Chat = () => {
       return;
     }
 
-    // Check if DynamoDB tables are available
-    if (!generatedSchema.dynamodb_tables || generatedSchema.dynamodb_tables.length === 0) {
-      toast.error("DynamoDB schema not generated yet. Please wait for the schema to be generated.");
-      setShowDeployDialog(false);
-      return;
-    }
-
     setIsDeploying(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/projects/deploy`, {
+      let endpoint = '';
+      let dbType = '';
+
+      if (deploymentType === 'dynamodb') {
+        // Check if DynamoDB tables are available
+        if (!generatedSchema.dynamodb_tables || generatedSchema.dynamodb_tables.length === 0) {
+          toast.error("DynamoDB schema not generated yet. Please wait for the schema to be generated.");
+          setShowDeployDialog(false);
+          setIsDeploying(false);
+          return;
+        }
+        endpoint = `${API_BASE_URL}/api/projects/deploy`;
+        dbType = 'dynamodb';
+      } else {
+        // Check if PostgreSQL SQL is available
+        if (!generatedSchema.postgres_sql || !generatedSchema.postgres_sql.trim()) {
+          toast.error("PostgreSQL schema not generated yet. Please wait for the schema to be generated.");
+          setShowDeployDialog(false);
+          setIsDeploying(false);
+          return;
+        }
+        endpoint = `${API_BASE_URL}/api/projects/deploy-supabase`;
+        dbType = 'supabase';
+      }
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: sessionId || "default",
-          database_type: "dynamodb", // Always DynamoDB
+          database_type: dbType,
           database_name: databaseName,
           spec: generatedSchema
         })
@@ -366,16 +385,36 @@ const Chat = () => {
                 </div>
               </div>
               
-              {/* Deploy Button - Only show if DynamoDB tables are available */}
-              {generatedSchema.dynamodb_tables && generatedSchema.dynamodb_tables.length > 0 && (
-                <Button
-                  onClick={() => setShowDeployDialog(true)}
-                  className="w-fit bg-gradient-to-r from-green-600 to-emerald-600 hover:opacity-90"
-                >
-                  <Rocket className="mr-2 h-4 w-4" />
-                  Deploy to AWS DynamoDB
-                </Button>
-              )}
+              {/* Deploy Buttons */}
+              <div className="flex gap-3 flex-wrap">
+                {/* DynamoDB Deploy Button */}
+                {generatedSchema.dynamodb_tables && generatedSchema.dynamodb_tables.length > 0 && (
+                  <Button
+                    onClick={() => {
+                      setDeploymentType('dynamodb');
+                      setShowDeployDialog(true);
+                    }}
+                    className="w-fit bg-gradient-to-r from-green-600 to-emerald-600 hover:opacity-90"
+                  >
+                    <Rocket className="mr-2 h-4 w-4" />
+                    Deploy to AWS DynamoDB
+                  </Button>
+                )}
+                
+                {/* Supabase Deploy Button */}
+                {generatedSchema.postgres_sql && generatedSchema.postgres_sql.trim() && (
+                  <Button
+                    onClick={() => {
+                      setDeploymentType('supabase');
+                      setShowDeployDialog(true);
+                    }}
+                    className="w-fit bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90"
+                  >
+                    <Rocket className="mr-2 h-4 w-4" />
+                    Deploy to Supabase
+                  </Button>
+                )}
+              </div>
             </div>
 
           </div>
@@ -483,11 +522,15 @@ const Chat = () => {
       <AlertDialog open={showDeployDialog} onOpenChange={setShowDeployDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deploy to AWS DynamoDB</AlertDialogTitle>
+            <AlertDialogTitle>
+              {deploymentType === 'dynamodb' ? 'Deploy to AWS DynamoDB' : 'Deploy to Supabase'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Deploy your database schema to AWS DynamoDB. Enter a name for your database.
+              {deploymentType === 'dynamodb' 
+                ? 'Deploy your database schema to AWS DynamoDB. Enter a name for your database.'
+                : 'Deploy your PostgreSQL schema to Supabase. Enter a name for your database.'}
               <span className="block mt-2 text-sm">
-                Database Type: <strong>DynamoDB</strong> (PostgreSQL deployment not yet supported)
+                Database Type: <strong>{deploymentType === 'dynamodb' ? 'DynamoDB' : 'Supabase PostgreSQL'}</strong>
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -516,7 +559,9 @@ const Chat = () => {
             <AlertDialogAction
               onClick={handleDeploy}
               disabled={isDeploying || !databaseName.trim()}
-              className="bg-gradient-to-r from-green-600 to-emerald-600"
+              className={deploymentType === 'dynamodb' 
+                ? "bg-gradient-to-r from-green-600 to-emerald-600" 
+                : "bg-gradient-to-r from-purple-600 to-indigo-600"}
             >
               {isDeploying ? (
                 <>

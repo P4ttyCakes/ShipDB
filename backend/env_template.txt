@@ -15,6 +15,12 @@ AWS_ACCESS_KEY_ID=your_aws_access_key_here
 AWS_SECRET_ACCESS_KEY=your_aws_secret_key_here
 AWS_REGION=us-east-1
 
+# Supabase Configuration (for PostgreSQL deployment)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_anon_key_here
+SUPABASE_SERVICE_KEY=your_service_role_key_here
+SUPABASE_DB_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+
 # Database Configuration
 DATABASE_URL=postgresql://user:password@localhost:5432/shipdb
 

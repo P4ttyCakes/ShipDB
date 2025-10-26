@@ -38,15 +38,17 @@ class Settings(BaseSettings):
     RDS_MASTER_USERNAME: Optional[str] = None
     RDS_MASTER_PASSWORD: Optional[str] = None
     
+    # Supabase
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_KEY: Optional[str] = None
+    SUPABASE_SERVICE_KEY: Optional[str] = None
+    SUPABASE_DB_URL: Optional[str] = None
+    
     # Other
     PASSWORD: Optional[str] = None
     
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./shipdb.db"
-    
-    # Supabase
-    SUPABASE_URL: Optional[str] = None
-    SUPABASE_SERVICE_KEY: Optional[str] = None
     
     class Config:
         env_file = ".env"

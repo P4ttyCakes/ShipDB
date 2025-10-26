@@ -220,3 +220,52 @@ async def deploy_database(payload: DeployRequest):
     except Exception as e:
         logger.exception(f"Deployment failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Deployment failed: {str(e)}")
+
+
+@router.post("/deploy-supabase", response_model=DeploymentResponse)
+async def deploy_to_supabase(payload: DeployRequest):
+    """Deploy PostgreSQL schema to Supabase"""
+    try:
+        logger.info(f"Supabase deployment request for project {payload.project_id}")
+        
+        # Get PostgreSQL SQL from the spec
+        postgres_sql = payload.spec.get("postgres_sql", "")
+        if not postgres_sql:
+            raise HTTPException(status_code=400, detail="PostgreSQL schema not found in spec. Please ensure schema generation completed successfully.")
+        
+        db_type = DatabaseType.SUPABASE
+        
+        # Create deployment request
+        request = DeploymentRequest(
+            project_id=payload.project_id,
+            database_type=db_type,
+            database_name=payload.database_name,
+            schema_data=postgres_sql,
+            region="supabase"
+        )
+        
+        # Get appropriate deployment service
+        service = DeploymentFactory.get_service(db_type)
+        
+        if not service:
+            raise HTTPException(status_code=400, detail="Supabase deployment service not available")
+        
+        # Validate credentials
+        if not await service.validate_credentials():
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid Supabase credentials. Please check your SUPABASE_URL and SUPABASE_KEY."
+            )
+        
+        # Execute deployment
+        logger.info(f"Starting Supabase deployment for project {payload.project_id}")
+        result = await service.deploy(request)
+        
+        logger.success(f"Supabase deployment completed: {result.deployment_id}")
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Supabase deployment failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Supabase deployment failed: {str(e)}")

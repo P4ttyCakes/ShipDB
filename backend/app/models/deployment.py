@@ -6,6 +6,7 @@ from enum import Enum
 class DatabaseType(str, Enum):
     POSTGRESQL = "postgresql"
     DYNAMODB = "dynamodb"
+    SUPABASE = "supabase"
 
 
 class DeploymentRequest(BaseModel):
