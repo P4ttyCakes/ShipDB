@@ -17,7 +17,7 @@ import {
   addEdge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -57,6 +57,7 @@ interface TableNodeData {
   onFieldsChange?: (nodeId: string, fields: any[]) => void;
   allTables?: Array<{ id: string; name: string }>;
   currentNodeId?: string;
+  isSuggestion?: boolean;
 }
 
 // Color palette for tables sharing common entities - VIBRANT BORDER COLORS
@@ -141,6 +142,7 @@ const TableNode = (props: NodeProps) => {
   
   const width = props.width || 300;
   const height = props.height || 400;
+  const isSuggestion = data?.isSuggestion || false;
 
   return (
     <div 
@@ -154,7 +156,8 @@ const TableNode = (props: NodeProps) => {
         minHeight: 200,
       }}
     >
-      {/* Custom Resize Handle - Bottom Right */}
+      {/* Custom Resize Handle - Bottom Right - Hidden for suggestions */}
+      {!isSuggestion && (
       <div
         className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-50 bg-blue-500 border-2 border-white rounded-tl-lg hover:bg-blue-600 transition-colors"
         style={{
@@ -192,6 +195,7 @@ const TableNode = (props: NodeProps) => {
           document.addEventListener('mouseup', handleMouseUp);
         }}
       />
+      )}
       
       <Handle 
         type="source" 
@@ -262,7 +266,7 @@ const TableNode = (props: NodeProps) => {
       
       {/* Fields - Always Scrollable */}
       <div className="p-2 pb-1 space-y-1 h-[calc(100%-6.5rem)] overflow-y-auto overscroll-contain">
-        {fields.map((field: any, idx: number) => (
+            {fields.map((field: any, idx: number) => (
           <div key={idx}>
             <div 
               className={`flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-black/5 transition-colors ${
@@ -270,7 +274,7 @@ const TableNode = (props: NodeProps) => {
               }`}
             >
             {editingField === idx ? (
-              <Input
+                <Input
                 value={field.name || ''}
                 onChange={(e) => {
                   const newName = e.target.value;
@@ -317,9 +321,9 @@ const TableNode = (props: NodeProps) => {
             )}
             
             {editingType === idx ? (
-              <Input
+                <Input
                 value={field.type || ''}
-                onChange={(e) => handleUpdateField(idx, { type: e.target.value })}
+                  onChange={(e) => handleUpdateField(idx, { type: e.target.value })}
                 placeholder="Type (required)"
                 className={`w-24 h-7 text-xs ${!field.type || !field.type.trim() ? 'border-red-500' : ''}`}
                 autoFocus
@@ -370,36 +374,36 @@ const TableNode = (props: NodeProps) => {
                 )}
               </>
             )}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => handleRemoveField(idx)}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleRemoveField(idx)}
               className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-            >
+                >
               <Trash2 className="h-3 w-3" />
-            </Button>
+                </Button>
             </div>
             {nameError && (editingField === idx || editingType === idx) && (
               <div className="text-xs text-red-500 px-2 pb-1">
                 {nameError}
               </div>
             )}
-          </div>
-        ))}
+              </div>
+            ))}
       </div>
       
       {/* Add Field Button and Connect Dropdown - Fixed at Bottom, Outside Scroll Area */}
       <div className="px-2 pb-1.5 pt-1.5 border-t flex-shrink-0" style={{ borderColor: `${borderColor}40` }}>
         <div className="grid grid-cols-2 gap-1.5">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleAddField}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleAddField}
             className="h-7 text-xs"
-          >
+            >
             <Plus className="mr-1 h-3 w-3" />
             Add Field
-          </Button>
+            </Button>
           <Select
             onValueChange={(value) => {
               console.log('Connecting:', data?.currentNodeId, 'to', value);
@@ -537,9 +541,33 @@ const calculateHierarchicalLayout = (entities: any[], edges: Edge[]) => {
   return levelBuckets;
 };
 
+// API function to fetch AI suggestions
+const fetchAISuggestions = async (schemaData: any) => {
+  try {
+    const response = await fetch('http://localhost:8000/api/schema/suggestions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schema: schemaData }),
+    });
+    if (!response.ok) throw new Error('Failed to fetch suggestions');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching AI suggestions:', error);
+    return null;
+  }
+};
+
 export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: InteractiveSchemaVisualizationProps) => {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
+  const [aiSuggestionsEnabled, setAiSuggestionsEnabled] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<any>(null);
+  const [activeSuggestionOption, setActiveSuggestionOption] = useState<1 | 2>(1);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [suggestionNodes, setSuggestionNodes] = useState<Node[]>([]);
+  const [suggestionEdges, setSuggestionEdges] = useState<Edge[]>([]);
+  const [cachedNodes, setCachedNodes] = useState<{ option1: Node[] | null, option2: Node[] | null }>({ option1: null, option2: null });
+  const [cachedEdges, setCachedEdges] = useState<{ option1: Edge[] | null, option2: Edge[] | null }>({ option1: null, option2: null });
 
   // Handler for when nodes request a size change
   const handleNodeSizeChange = useCallback((nodeId: string, width: number, height: number) => {
@@ -662,14 +690,14 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
           const isImportant = count >= 2; // Multiple fields connecting = important
           
           // Use subtle styling for less important edges
-          initialEdges.push({
+            initialEdges.push({
             id: `${entity.name}-${field.foreign_key.table}-${field.name}`,
-            source: field.foreign_key.table,
-            target: entity.name,
+              source: field.foreign_key.table,
+              target: entity.name,
             type: 'straight',
             animated: false,
-            markerEnd: {
-              type: 'arrowclosed',
+              markerEnd: {
+                type: 'arrowclosed',
               width: isImportant ? 20 : 15,
               height: isImportant ? 20 : 15,
               color: isImportant ? '#475569' : '#94a3b8',
@@ -679,7 +707,7 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
               strokeWidth: isImportant ? 2 : 1,
               opacity: isImportant ? 0.8 : 0.3,
             },
-          });
+            });
         }
       });
     });
@@ -791,13 +819,278 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
     });
   }, [schema, handleNodeSizeChange, handleConnect, handleFieldsChange]);
 
+  // Auto-fetch suggestions when toggle is ON and schema updates
+  useEffect(() => {
+    if (aiSuggestionsEnabled && schema?.entities && schema.entities.length > 0) {
+      setIsLoadingSuggestions(true);
+      // Clear cache when fetching new suggestions for a new schema
+      setCachedNodes({ option1: null, option2: null });
+      setCachedEdges({ option1: null, option2: null });
+      fetchAISuggestions(schema).then(suggestions => {
+        setAiSuggestions(suggestions);
+        setIsLoadingSuggestions(false);
+      });
+    }
+  }, [schema, aiSuggestionsEnabled]);
+
+  // Convert suggestions into nodes and edges for rendering - ONLY WHEN NOT LOADING - WITH CACHING
+  useEffect(() => {
+    // Don't update suggestions while still loading
+    if (isLoadingSuggestions) {
+      return;
+    }
+    
+    // Check if we already have this cached
+    if (activeSuggestionOption === 1 && cachedNodes.option1 && cachedEdges.option1) {
+      console.log('Using cached Option 1');
+      setSuggestionNodes(cachedNodes.option1);
+      setSuggestionEdges(cachedEdges.option1);
+      return;
+    }
+    
+    if (activeSuggestionOption === 2 && cachedNodes.option2 && cachedEdges.option2) {
+      console.log('Using cached Option 2');
+      setSuggestionNodes(cachedNodes.option2);
+      setSuggestionEdges(cachedEdges.option2);
+      return;
+    }
+    
+    console.log('Computing new suggestion nodes/edges for option:', activeSuggestionOption);
+    
+    if (!aiSuggestions) {
+      console.log('No suggestions available');
+      setSuggestionNodes([]);
+      setSuggestionEdges([]);
+      return;
+    }
+    
+    if (activeSuggestionOption === 1) {
+      // Option 1: Add new table
+      const option1 = aiSuggestions?.option_1;
+      console.log('Option 1 data:', option1);
+      if (option1?.new_table) {
+        const newTable = option1.new_table;
+        
+        // Find a smart position (top-right area) that doesn't overlap
+        const existingNodes = nodes;
+        const maxX = Math.max(...existingNodes.map(n => n.position.x), 0);
+        const maxY = Math.max(...existingNodes.map(n => n.position.y), 0);
+        
+        // Calculate fixed size based on fields like regular tables
+        const fieldCount = (newTable.fields || []).length;
+        const fixedWidth = 300;
+        const fixedHeight = Math.max(200, 120 + fieldCount * 32);
+        
+        const suggestionNode: Node = {
+          id: `suggestion_${newTable.name}`,
+          type: 'tableNode',
+          position: { x: maxX + 450, y: 50 },
+          data: {
+            tableName: newTable.name,
+            fields: newTable.fields || [],
+            color: { bg: 'hsl(var(--card))', border: '#3b82f6', text: 'hsl(var(--foreground))' },
+            isSuggestion: true,
+            originalTable: newTable,
+          },
+          selectable: true,
+          draggable: false,
+          width: fixedWidth,
+          height: fixedHeight,
+          style: {
+            opacity: 0.6,
+            border: '2px dashed #3b82f6',
+            boxShadow: '0 0 16px rgba(59, 130, 246, 0.4)',
+            cursor: 'pointer',
+            width: fixedWidth,
+            height: fixedHeight,
+          },
+        };
+        console.log('Created suggestion node:', suggestionNode);
+        const suggestionNodeArray = [suggestionNode];
+        setSuggestionNodes(suggestionNodeArray);
+        setCachedNodes(prev => ({ ...prev, option1: suggestionNodeArray }));
+
+        // Create edges for connections - point TO the existing table
+        const newEdges: Edge[] = (option1.connections || []).map((conn: any, idx: number) => ({
+          id: `suggestion_edge_${idx}`,
+          source: `suggestion_${newTable.name}`,
+          target: conn.to,
+          type: 'straight' as const,
+          animated: false,
+          markerEnd: {
+            type: 'arrowclosed' as const,
+            width: 20,
+            height: 20,
+            color: '#3b82f6',
+          },
+          style: {
+            stroke: '#3b82f6',
+            strokeWidth: 2,
+            opacity: 0.5,
+            strokeDasharray: '8,4',
+          },
+        }));
+        setSuggestionEdges(newEdges);
+        setCachedEdges(prev => ({ ...prev, option1: newEdges }));
+      }
+    } else if (activeSuggestionOption === 2) {
+      // Option 2: Merge tables
+      const option2 = aiSuggestions?.option_2;
+      if (option2?.merged_table) {
+        const mergedTable = option2.merged_table;
+        
+        // Position the merged table in a smart location (lower right)
+        const existingNodes = nodes;
+        const maxX = Math.max(...existingNodes.map(n => n.position.x), 0);
+        const maxY = Math.max(...existingNodes.map(n => n.position.y), 0);
+        
+        // Calculate fixed size based on fields like regular tables
+        const fieldCount = (mergedTable.fields || []).length;
+        const fixedWidth = 300;
+        const fixedHeight = Math.max(200, 120 + fieldCount * 32);
+        
+        const suggestionNode: Node = {
+          id: `suggestion_${mergedTable.name}`,
+          type: 'tableNode',
+          position: { x: maxX + 450, y: 350 },
+          data: {
+            tableName: mergedTable.name,
+            fields: mergedTable.fields || [],
+            color: { bg: 'hsl(var(--card))', border: '#10b981', text: 'hsl(var(--foreground))' },
+            isSuggestion: true,
+            originalTable: mergedTable,
+          },
+          selectable: true,
+          draggable: false,
+          width: fixedWidth,
+          height: fixedHeight,
+          style: {
+            opacity: 0.6,
+            border: '2px dashed #10b981',
+            boxShadow: '0 0 16px rgba(16, 185, 129, 0.4)',
+            cursor: 'pointer',
+            width: fixedWidth,
+            height: fixedHeight,
+          },
+        };
+        const suggestionNodeArray = [suggestionNode];
+        setSuggestionNodes(suggestionNodeArray);
+        setCachedNodes(prev => ({ ...prev, option2: suggestionNodeArray }));
+
+        // Create edges for connections - point TO other tables
+        const newEdges: Edge[] = (option2.connections || []).map((conn: any, idx: number) => ({
+          id: `suggestion_edge_${idx}`,
+          source: `suggestion_${mergedTable.name}`,
+          target: conn.to,
+          type: 'straight' as const,
+          animated: false,
+          markerEnd: {
+            type: 'arrowclosed' as const,
+            width: 20,
+            height: 20,
+            color: '#10b981',
+          },
+          style: {
+            stroke: '#10b981',
+            strokeWidth: 2,
+            opacity: 0.5,
+            strokeDasharray: '8,4',
+          },
+        }));
+        setSuggestionEdges(newEdges);
+        setCachedEdges(prev => ({ ...prev, option2: newEdges }));
+      }
+    }
+  }, [aiSuggestions, activeSuggestionOption, isLoadingSuggestions]);
+
+  // Convert a ghost node into a regular table node
+  const convertGhostToRealTable = useCallback((ghostNode: Node): Node => {
+    const nodeData = ghostNode.data as TableNodeData & { isSuggestion?: boolean; originalTable?: any };
+    const tableName = nodeData.originalTable?.name || nodeData.tableName || ghostNode.id;
+    
+    // Get a color for the new table
+    const color = colorPalette[nodes.length % colorPalette.length];
+    
+    const realNode: Node = {
+      id: tableName,
+      type: 'tableNode',
+      position: ghostNode.position, // Keep the same position
+      data: {
+        tableName: tableName,
+        fields: nodeData.originalTable?.fields || nodeData.fields || [],
+        color: color,
+        onSizeChange: handleNodeSizeChange,
+        onConnect: handleConnect,
+        onFieldsChange: handleFieldsChange,
+        currentNodeId: tableName,
+      },
+      draggable: true,
+      selectable: true,
+      width: ghostNode.width || 300,
+      height: ghostNode.height || 200,
+    };
+    
+    return realNode;
+  }, [nodes, handleNodeSizeChange, handleConnect, handleFieldsChange]);
+
+  // Handle clicking on a suggestion node to accept it
+  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+    const nodeData = node.data as TableNodeData & { isSuggestion?: boolean; originalTable?: any };
+    
+    // Check if this is a suggestion node
+    if (nodeData.isSuggestion && nodeData.originalTable) {
+      console.log('Accepting suggestion node:', node.id);
+      
+      // Convert ghost to real table
+      const realNode = convertGhostToRealTable(node);
+      
+      // Add the real node to the main nodes array
+      setNodes((prevNodes) => {
+        const allNodes = [...prevNodes, realNode];
+        // Update allTables for all nodes including the new one
+        return allNodes.map(node => ({
+          ...node,
+          data: {
+            ...node.data,
+            allTables: allNodes.map(n => ({ id: n.id, name: (n.data as TableNodeData).tableName || n.id })),
+          },
+        }));
+      });
+      
+      // Convert suggestion edges to real edges
+      setEdges((prevEdges) => {
+        if (suggestionEdges.length > 0) {
+          const realEdges = suggestionEdges
+            .filter(edge => edge.source === node.id)
+            .map(edge => ({
+              ...edge,
+              id: `${realNode.id}-${edge.target}`,
+              source: realNode.id,
+              style: {
+                ...edge.style,
+                opacity: 1,
+                strokeDasharray: '0',
+              },
+            }));
+          
+          return [...prevEdges, ...realEdges];
+        }
+        return prevEdges;
+      });
+      
+      // Remove the suggestion from the ghosts
+      setSuggestionNodes([]);
+      setSuggestionEdges([]);
+    }
+  }, [suggestionEdges, convertGhostToRealTable]);
+
   const onNodesChange = useCallback((changes: any) => {
     setNodes((nds) => {
       const updated = [...nds];
       changes.forEach((change: any) => {
         const index = updated.findIndex((n) => n.id === change.id);
         if (index !== -1) {
-          if (change.type === 'position' && change.position) {
+      if (change.type === 'position' && change.position) {
             updated[index] = { ...updated[index], position: change.position };
           } else if (change.type === 'resize' && change.dimensions) {
             // Handle NodeResizer resize events
@@ -858,87 +1151,105 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
 
   // Handle updating schema from current visualization state
   const handleUpdateSchema = useCallback(() => {
-    if (!onSchemaUpdate) return;
-    
-    // Convert nodes back to entities
-    const updatedEntities = nodes.map(node => {
-      let fields = (node.data as TableNodeData).fields || [];
+    try {
+      if (!onSchemaUpdate) return;
       
-      // If table has no fields, add a default id field for DynamoDB
-      if (fields.length === 0) {
-        fields = [
-          {
-            name: 'id',
-            type: 'uuid',
-            primary_key: true,
-            required: true,
-          }
-        ];
-      }
-      // If table has fields but no primary key, add one to the first field
-      else if (!fields.some((f: any) => f.primary_key)) {
-        fields = fields.map((field: any, idx: number) => 
-          idx === 0 ? { ...field, primary_key: true } : field
-        );
-      }
+      console.log('handleUpdateSchema: Starting schema update');
+      console.log('Current nodes:', nodes);
+      console.log('Current edges:', edges);
       
-      return {
-        name: (node.data as TableNodeData).tableName || node.id,
-        fields: fields,
-      };
-    });
-    
-    // Create a map of target entities to their source entities (from edges)
-    const targetToSourceMap = new Map<string, string>();
-    edges.forEach(edge => {
-      if (edge.target && edge.source) {
-        targetToSourceMap.set(edge.target as string, edge.source as string);
-      }
-    });
-    
-    // Add foreign keys only to fields that don't already have one, and only for user-created edges
-    updatedEntities.forEach(entity => {
-      const hasForeignKey = entity.fields.some((f: any) => f.foreign_key);
-      const sourceTable = targetToSourceMap.get(entity.name);
+      // Filter out any ghost/suggestion nodes (shouldn't be in main nodes, but just in case)
+      const realNodes = nodes.filter(node => {
+        const nodeData = node.data as TableNodeData & { isSuggestion?: boolean };
+        return !nodeData.isSuggestion;
+      });
       
-      if (sourceTable && !hasForeignKey) {
-        // Add foreign key to the first suitable field (or create one)
-        let fkAdded = false;
-        entity.fields = entity.fields.map((field: any) => {
-          // Only add FK if this field doesn't already have one
-          if (!field.foreign_key && !fkAdded) {
-            fkAdded = true;
-            return {
-              ...field,
+      console.log('Real nodes after filtering:', realNodes);
+      
+      // Convert nodes back to entities
+      const updatedEntities = realNodes.map(node => {
+        let fields = (node.data as TableNodeData).fields || [];
+        
+        // If table has no fields, add a default id field for DynamoDB
+        if (fields.length === 0) {
+          fields = [
+            {
+              name: 'id',
+              type: 'uuid',
+              primary_key: true,
+              required: true,
+            }
+          ];
+        }
+        // If table has fields but no primary key, add one to the first field
+        else if (!fields.some((f: any) => f.primary_key)) {
+          fields = fields.map((field: any, idx: number) => 
+            idx === 0 ? { ...field, primary_key: true } : field
+          );
+        }
+        
+        return {
+          name: (node.data as TableNodeData).tableName || node.id,
+          fields: fields,
+        };
+             });
+      
+      // Create a map of target entities to their source entities (from edges)
+      const targetToSourceMap = new Map<string, string>();
+      edges.forEach(edge => {
+        if (edge.target && edge.source) {
+          targetToSourceMap.set(edge.target as string, edge.source as string);
+        }
+      });
+      
+      // Add foreign keys only to fields that don't already have one, and only for user-created edges
+      updatedEntities.forEach(entity => {
+        const hasForeignKey = entity.fields.some((f: any) => f.foreign_key);
+        const sourceTable = targetToSourceMap.get(entity.name);
+        
+        if (sourceTable && !hasForeignKey) {
+          // Add foreign key to the first suitable field (or create one)
+          let fkAdded = false;
+          entity.fields = entity.fields.map((field: any) => {
+            // Only add FK if this field doesn't already have one
+            if (!field.foreign_key && !fkAdded) {
+              fkAdded = true;
+              return {
+                ...field,
+                foreign_key: {
+                  table: sourceTable,
+                  column: 'id',
+                },
+              };
+            }
+            return field;
+          });
+          
+          // If no field got the FK added, add a new field
+          if (!fkAdded && entity.fields.length > 0) {
+            const firstField = entity.fields[0];
+            entity.fields[0] = {
+              ...firstField,
               foreign_key: {
                 table: sourceTable,
                 column: 'id',
               },
             };
           }
-          return field;
-        });
-        
-        // If no field got the FK added, add a new field
-        if (!fkAdded && entity.fields.length > 0) {
-          const firstField = entity.fields[0];
-          entity.fields[0] = {
-            ...firstField,
-            foreign_key: {
-              table: sourceTable,
-              column: 'id',
-            },
-          };
         }
-      }
-    });
-    
-    const updatedSchema = {
-      ...schema,
-      entities: updatedEntities,
-    };
-    
-    onSchemaUpdate(updatedSchema);
+      });
+      
+      const updatedSchema = {
+        ...schema,
+        entities: updatedEntities,
+      };
+      
+      console.log('Updated schema:', updatedSchema);
+      onSchemaUpdate(updatedSchema);
+    } catch (error) {
+      console.error('Error in handleUpdateSchema:', error);
+      alert(`Error updating schema: ${error}`);
+    }
   }, [nodes, edges, schema, onSchemaUpdate]);
 
   // Handle adding new tables
@@ -992,6 +1303,53 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
         Add Table
       </button>
       
+      {/* AI Suggestions Toggle */}
+      <button
+        onClick={() => setAiSuggestionsEnabled(!aiSuggestionsEnabled)}
+        className={`absolute top-20 right-4 z-50 px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 ${
+          aiSuggestionsEnabled
+            ? 'bg-blue-700 hover:bg-blue-800 text-white'
+            : 'bg-blue-600 hover:bg-blue-700 text-white'
+        }`}
+      >
+        <Sparkles className="h-4 w-4" />
+        AI Suggestions {aiSuggestionsEnabled ? 'ON' : 'OFF'}
+      </button>
+
+      {/* Option 1/2 Toggle Widget - Only show when AI suggestions are enabled and loaded */}
+      {aiSuggestionsEnabled && aiSuggestions && (
+        <div className="absolute top-36 right-4 z-50 bg-white rounded-lg shadow-lg border border-gray-200 p-2 flex items-center gap-2">
+          <button
+            onClick={() => setActiveSuggestionOption(1)}
+            className={`px-3 py-1 rounded text-sm font-medium transition-all ${
+              activeSuggestionOption === 1
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            ← Option 1
+          </button>
+          <div className="h-6 w-px bg-gray-300" />
+          <button
+            onClick={() => setActiveSuggestionOption(2)}
+            className={`px-3 py-1 rounded text-sm font-medium transition-all ${
+              activeSuggestionOption === 2
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Option 2 →
+          </button>
+        </div>
+      )}
+
+      {/* Loading indicator */}
+      {isLoadingSuggestions && (
+        <div className="absolute top-36 right-4 z-50 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
+          Generating suggestions...
+        </div>
+      )}
+      
       {/* Update Schema Button */}
       {onSchemaUpdate && (
         <button
@@ -1003,11 +1361,27 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
       )}
       
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={(() => {
+          // Only show suggestions if loading is complete
+          const shouldShowSuggestions = aiSuggestionsEnabled && aiSuggestions && !isLoadingSuggestions;
+          const finalNodes = shouldShowSuggestions ? [...nodes, ...suggestionNodes] : nodes;
+          console.log('Rendering ReactFlow with nodes:', { 
+            nodeCount: finalNodes.length, 
+            suggestionNodeCount: suggestionNodes.length,
+            aiSuggestionsEnabled,
+            hasSuggestions: !!aiSuggestions,
+            isLoadingSuggestions
+          });
+          return finalNodes;
+        })()}
+        edges={(() => {
+          const shouldShowSuggestions = aiSuggestionsEnabled && aiSuggestions && !isLoadingSuggestions;
+          return shouldShowSuggestions ? [...edges, ...suggestionEdges] : edges;
+        })()}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
         fitView
         className="bg-background"

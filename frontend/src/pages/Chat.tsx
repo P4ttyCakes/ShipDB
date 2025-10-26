@@ -90,8 +90,11 @@ const Chat = () => {
     const startConversation = async () => {
       if (sessionId) return; // Already started
       
+      console.log('Starting conversation...'); // Debug log
       setIsLoading(true);
+      setInitializing(true);
       try {
+        console.log('Fetching from:', `${API_BASE_URL}/api/projects/new_project/start`); // Debug log
         const response = await fetch(`${API_BASE_URL}/api/projects/new_project/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -101,21 +104,25 @@ const Chat = () => {
           })
         });
 
+        console.log('Response status:', response.status); // Debug log
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const result = await response.json();
+        console.log('Start conversation result:', result); // Debug log
         setSessionId(result.session_id);
         setMessages([{ role: 'assistant', content: result.prompt }]);
         setInitializing(false);
       } catch (error) {
+        console.error('Error starting conversation:', error); // Debug log
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         toast.error(`Error starting conversation: ${errorMessage}`);
         setMessages([{ role: 'assistant', content: 'Sorry, there was an error starting the conversation. Please refresh the page.' }]);
         setInitializing(false);
       } finally {
         setIsLoading(false);
+        console.log('Start conversation complete'); // Debug log
       }
     };
 
@@ -146,9 +153,11 @@ const Chat = () => {
       }
 
       const result = await response.json();
+      console.log('Chat result:', result); // Debug logging
       setMessages(prev => [...prev, { role: 'assistant', content: result.prompt }]);
       
       if (result.done) {
+        console.log('Conversation marked as done'); // Debug logging
         setConversationDone(true);
         toast.success("Conversation complete! You can finish to generate the schema.");
       }

@@ -1,4 +1,5 @@
 import json
+import re
 import threading
 import time
 from typing import Dict, Any, Optional, List
@@ -514,6 +515,23 @@ class AIAgentService:
             return text[start:end + 1]
         return ""
 
+    def _extract_json(self, text: str) -> str:
+        """Extract JSON from text, handling markdown code blocks."""
+        if not text:
+            return ""
+        
+        # Try to find JSON in markdown code block
+        json_match = re.search(r'```json\s*\n(.*?)\n```', text, re.DOTALL)
+        if json_match:
+            return json_match.group(1).strip()
+        
+        # Try direct JSON
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match:
+            return json_match.group(0)
+        
+        return text
+
     def start_session(self, name: str, description: Optional[str] = None) -> Dict[str, Any]:
         """Create a new chat session and return the first question to ask the user."""
         if not name or not str(name).strip():
@@ -606,6 +624,92 @@ class AIAgentService:
         if not state.get("project_id"):
             state["project_id"] = str(uuid4())
         return {"project_id": state["project_id"], "spec": spec}
+
+    def generate_schema_suggestions(self, postgres_sql: str, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate two AI suggestions for improving the database schema."""
+        prompt = f"""You are analyzing a database schema and providing improvement suggestions.
+
+CURRENT DATABASE SCHEMA:
+{postgres_sql}
+
+TASK: Provide TWO suggestions for how this database could be improved.
+
+OPTION 1 - ADD A NEW TABLE:
+Analyze the current schema and identify what new table would add the most value. Consider:
+- What entity is missing that would improve the database design?
+- What relationships would benefit from explicit table creation?
+- What would make the data model more complete or normalized?
+
+Provide your response in this EXACT JSON format:
+{{
+  "option_1": {{
+    "reasoning": "Brief explanation of why this table would improve the database",
+    "new_table": {{
+      "name": "table_name",
+      "fields": [
+        {{"name": "id", "type": "uuid", "required": true, "primary_key": true}},
+        {{"name": "field_name", "type": "field_type", "required": true}},
+        {{"name": "reference_id", "type": "uuid", "required": true, "foreign_key": {{"table": "existing_table", "field": "id"}}}}
+      ]
+    }},
+    "connections": [
+      {{"from": "new_table_name", "to": "existing_table_name"}}
+    ]
+  }},
+  "option_2": {{
+    "reasoning": "Brief explanation of why merging these tables would improve the database",
+    "tables_to_merge": ["table1", "table2"],
+    "merged_table": {{
+      "name": "merged_table_name",
+      "fields": [
+        {{"name": "id", "type": "uuid", "required": true, "primary_key": true}},
+        {{"name": "field_from_table1", "type": "type", "required": true}},
+        {{"name": "field_from_table2", "type": "type", "required": true}}
+      ]
+    }},
+    "connections": [
+      {{"from": "merged_table_name", "to": "other_table_name"}}
+    ]
+  }}
+}}
+
+CRITICAL: Respond with ONLY valid JSON. No other text before or after."""
+        
+        try:
+            message = self._client.messages.create(
+                model=self._model_name,
+                max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            
+            response_text = message.content[0].text if message.content else ""
+            response_text = self._extract_json(response_text)
+            
+            # Parse JSON response
+            suggestions = json.loads(response_text)
+            
+            # Ensure we have both options
+            if "option_1" not in suggestions or "option_2" not in suggestions:
+                raise ValueError("AI did not return both option_1 and option_2")
+            
+            return suggestions
+            
+        except Exception as e:
+            logger.error(f"Failed to generate suggestions: {e}")
+            # Return fallback suggestions
+            return {
+                "option_1": {
+                    "reasoning": "Could not generate AI suggestion. Please try again.",
+                    "new_table": None,
+                    "connections": []
+                },
+                "option_2": {
+                    "reasoning": "Could not generate AI suggestion. Please try again.",
+                    "tables_to_merge": [],
+                    "merged_table": None,
+                    "connections": []
+                }
+            }
 
 
 agent_service = AIAgentService()
