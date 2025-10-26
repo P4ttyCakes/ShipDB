@@ -414,7 +414,9 @@ const Chat = () => {
                 deploymentType="supabase"
                 onSchemaUpdate={(updatedSchema) => {
                   console.log("Schema updated:", updatedSchema);
-                  toast.success("Schema updated from ChartDB!");
+                  // Update the generatedSchema state to reflect the changes
+                  setGeneratedSchema(updatedSchema);
+                  toast.success("Schema updated successfully! Check 'Generated Schema' to see changes.");
                 }}
               />
             </div>

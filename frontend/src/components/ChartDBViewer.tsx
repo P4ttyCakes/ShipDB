@@ -27,6 +27,47 @@ export const ChartDBViewer = forwardRef<ChartDBViewerRef, ChartDBViewerProps>(({
   const [schemaData, setSchemaData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const handleSchemaUpdate = async (updatedSchema: any) => {
+    try {
+      // Update the schema via API
+      const response = await fetch(`${API_BASE_URL}/api/schema/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          project_id: projectId,
+          schema: updatedSchema,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update schema');
+      }
+
+      const result = await response.json();
+      
+      // Get the updated artifacts from the response
+      const updatedSchemaWithArtifacts = {
+        ...updatedSchema,
+        ...result.artifacts, // Include postgres_sql, json_schema, dynamodb_tables
+      };
+
+      // Update local state with full schema including artifacts
+      setSchemaData(updatedSchemaWithArtifacts);
+      
+      // Call parent's onSchemaUpdate with the complete updated schema
+      if (onSchemaUpdate) {
+        onSchemaUpdate(updatedSchemaWithArtifacts);
+      }
+      
+      toast.success('Schema updated successfully');
+    } catch (error) {
+      console.error('Error updating schema:', error);
+      toast.error('Failed to update schema');
+    }
+  };
+
   const loadSchema = async (spec: any) => {
     setLoading(true);
     setError(null);
@@ -85,7 +126,10 @@ export const ChartDBViewer = forwardRef<ChartDBViewerRef, ChartDBViewerProps>(({
   return (
     <div className="h-full w-full flex flex-col" style={{ minWidth: 0 }}>
       <div className="flex-1 overflow-hidden min-w-0" style={{ minHeight: 0 }}>
-        <InteractiveSchemaVisualization schema={schemaData} />
+        <InteractiveSchemaVisualization 
+          schema={schemaData} 
+          onSchemaUpdate={handleSchemaUpdate}
+        />
       </div>
 
       <div className="px-2 py-1 border-t text-xs text-muted-foreground bg-muted/50 flex items-center gap-2">
