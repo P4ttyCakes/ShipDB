@@ -71,8 +71,11 @@ ShipDB understands and creates perfect databases for **EVERY** business sector:
 - **PyMongo, SQLAlchemy, psycopg2** - Database drivers
 
 ### Frontend
-- **HTML/CSS/JavaScript** (Lovable-friendly)
-- **Vanilla JS** - No framework dependencies
+- **React 18** with TypeScript
+- **Vite** - Fast build tool and dev server
+- **ReactFlow** - Interactive schema visualization
+- **TailwindCSS** - Utility-first styling
+- **shadcn/ui** - UI component library
 
 ## 📁 Project Structure
 
@@ -86,11 +89,12 @@ ShipDB/
 │   │   └── utils/        # Helper functions
 │   └── tests/            # Test suite
 │
-├── frontend/             # Lovable HTML/CSS/JS
+├── frontend/             # React + TypeScript + Vite
 │   ├── src/
-│   │   ├── components/   # UI components
+│   │   ├── components/   # React components
 │   │   ├── api/          # API client
 │   │   └── styles/       # CSS
+│   ├── package.json      # Dependencies
 │   └── index.html
 │
 └── docs/                 # Documentation
@@ -101,6 +105,7 @@ ShipDB/
 ### Prerequisites
 
 - Python 3.10+
+- Node.js 16+ and npm
 - AWS Account with credentials configured
 - OpenAI API key (or Anthropic/Gemini API key)
 
@@ -143,15 +148,17 @@ cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-### Frontend
-
-Open `frontend/index.html` in your browser or use a local server:
+### Frontend Setup
 
 ```bash
 cd frontend
-python -m http.server 8001
-# Open http://localhost:8001
+npm install
+npm run dev
 ```
+
+The frontend will be available at `http://localhost:5173` (or another port if 5173 is in use).
+
+**Note**: The frontend uses React with TypeScript, Vite, and ReactFlow for the interactive schema visualization. Make sure you have Node.js (v16 or higher) installed.
 
 ## 📖 Usage
 
@@ -175,7 +182,8 @@ See [CONFIGURATION.md](CONFIGURATION.md) for detailed setup instructions includi
 1. **Backend won't start**: Make sure you have Python 3.10+ and all dependencies installed
 2. **Import errors**: Run `./verify_setup.sh` to check your setup
 3. **API errors**: Ensure your `.env` file has the correct API keys
-4. **Frontend not loading**: Make sure you're running the frontend server on port 8001
+4. **Frontend not loading**: Make sure you've run `npm install` and `npm run dev` in the frontend directory
+5. **Node modules missing**: Run `npm install` in the frontend directory
 
 ### Getting Help
 
