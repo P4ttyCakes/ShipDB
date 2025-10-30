@@ -625,14 +625,31 @@ class AIAgentService:
             state["project_id"] = str(uuid4())
         return {"project_id": state["project_id"], "spec": spec}
 
-    def generate_schema_suggestions(self, postgres_sql: str, schema: Dict[str, Any]) -> Dict[str, Any]:
+    def generate_schema_suggestions(self, postgres_sql: str, schema: Dict[str, Any], rejected_suggestions: list = None, previously_suggested: list = None) -> Dict[str, Any]:
         """Generate two AI suggestions for improving the database schema."""
+        if rejected_suggestions is None:
+            rejected_suggestions = []
+        if previously_suggested is None:
+            previously_suggested = []
+        
+        # Combine rejected and previously suggested for clarity
+        all_excluded = list(set(rejected_suggestions + previously_suggested))
+        
+        excluded_text = ""
+        if rejected_suggestions:
+            rejected_list = ", ".join(rejected_suggestions)
+            excluded_text += f"\n\nCRITICAL: The following tables were EXPLICITLY REJECTED by the user - DO NOT suggest them:\n{rejected_list}"
+        
+        if previously_suggested:
+            prev_list = ", ".join(previously_suggested)
+            excluded_text += f"\n\nUNIQUENESS REQUIREMENT: The following tables have already been suggested to the user. Please suggest DIFFERENT tables:\n{prev_list}\n\nIf you need ideas, consider: audit trails, analytics/reporting tables, intermediate junction tables, normalization opportunities, or edge case tables."
+        
         prompt = f"""You are analyzing a database schema and providing improvement suggestions.
 
 CURRENT DATABASE SCHEMA:
-{postgres_sql}
+{postgres_sql}{excluded_text}
 
-TASK: Provide TWO suggestions for how this database could be improved.
+TASK: Provide TWO COMPLETELY NEW AND UNIQUE suggestions for how this database could be improved.
 
 OPTION 1 - ADD A NEW TABLE:
 Analyze the current schema and identify what new table would add the most value. Consider:

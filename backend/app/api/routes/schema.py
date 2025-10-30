@@ -67,6 +67,8 @@ async def get_ai_suggestions(request: Dict[str, Any] = Body(...)):
     """Get AI suggestions for improving the database schema."""
     try:
         schema = request.get("schema")
+        rejected_suggestions = request.get("rejected_suggestions", [])
+        previously_suggested = request.get("previously_suggested", [])
         
         if not schema:
             raise HTTPException(status_code=400, detail="Missing schema in request")
@@ -75,8 +77,8 @@ async def get_ai_suggestions(request: Dict[str, Any] = Body(...)):
         postgres_sql = to_postgres_sql(schema)
         
         # Call AI agent to get suggestions
-        logger.info("Generating AI suggestions for schema improvements")
-        suggestions = ai_agent.agent_service.generate_schema_suggestions(postgres_sql, schema)
+        logger.info(f"Generating AI suggestions for schema improvements (rejected: {rejected_suggestions}, previously suggested: {previously_suggested})")
+        suggestions = ai_agent.agent_service.generate_schema_suggestions(postgres_sql, schema, rejected_suggestions, previously_suggested)
         
         return {
             "option_1": suggestions.get("option_1"),

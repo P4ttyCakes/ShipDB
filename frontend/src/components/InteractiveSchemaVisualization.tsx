@@ -17,7 +17,7 @@ import {
   addEdge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Trash2, Plus, Sparkles } from 'lucide-react';
+import { Trash2, Plus, Sparkles, X, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -55,6 +55,7 @@ interface TableNodeData {
   onSizeChange?: (id: string, width: number, height: number) => void;
   onConnect?: (sourceNodeId: string, targetNodeId: string) => void;
   onFieldsChange?: (nodeId: string, fields: any[]) => void;
+  onReject?: (nodeId: string) => void;
   allTables?: Array<{ id: string; name: string }>;
   currentNodeId?: string;
   isSuggestion?: boolean;
@@ -156,6 +157,22 @@ const TableNode = (props: NodeProps) => {
         minHeight: 200,
       }}
     >
+      {/* Reject Button - Top Right - Only for suggestions */}
+      {isSuggestion && data?.onReject && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (data.onReject) {
+              data.onReject(props.id as string);
+            }
+          }}
+          className="absolute top-2 right-2 z-50 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition-colors flex items-center justify-center"
+          style={{ width: '24px', height: '24px' }}
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+      
       {/* Custom Resize Handle - Bottom Right - Hidden for suggestions */}
       {!isSuggestion && (
       <div
@@ -542,12 +559,16 @@ const calculateHierarchicalLayout = (entities: any[], edges: Edge[]) => {
 };
 
 // API function to fetch AI suggestions
-const fetchAISuggestions = async (schemaData: any) => {
+const fetchAISuggestions = async (schemaData: any, rejectedSuggestions: string[] = [], previouslySuggested: string[] = []) => {
   try {
     const response = await fetch('http://localhost:8000/api/schema/suggestions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ schema: schemaData }),
+      body: JSON.stringify({ 
+        schema: schemaData,
+        rejected_suggestions: rejectedSuggestions,
+        previously_suggested: previouslySuggested
+      }),
     });
     if (!response.ok) throw new Error('Failed to fetch suggestions');
     return await response.json();
@@ -560,14 +581,14 @@ const fetchAISuggestions = async (schemaData: any) => {
 export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: InteractiveSchemaVisualizationProps) => {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
-  const [aiSuggestionsEnabled, setAiSuggestionsEnabled] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<any>(null);
-  const [activeSuggestionOption, setActiveSuggestionOption] = useState<1 | 2>(1);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [suggestionNodes, setSuggestionNodes] = useState<Node[]>([]);
   const [suggestionEdges, setSuggestionEdges] = useState<Edge[]>([]);
   const [cachedNodes, setCachedNodes] = useState<{ option1: Node[] | null, option2: Node[] | null }>({ option1: null, option2: null });
   const [cachedEdges, setCachedEdges] = useState<{ option1: Edge[] | null, option2: Edge[] | null }>({ option1: null, option2: null });
+  const [rejectedSuggestions, setRejectedSuggestions] = useState<string[]>([]);
+  const [previouslySuggested, setPreviouslySuggested] = useState<string[]>([]);
 
   // Handler for when nodes request a size change
   const handleNodeSizeChange = useCallback((nodeId: string, width: number, height: number) => {
@@ -819,43 +840,95 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
     });
   }, [schema, handleNodeSizeChange, handleConnect, handleFieldsChange]);
 
-  // Auto-fetch suggestions when toggle is ON and schema updates
-  useEffect(() => {
-    if (aiSuggestionsEnabled && schema?.entities && schema.entities.length > 0) {
-      setIsLoadingSuggestions(true);
-      // Clear cache when fetching new suggestions for a new schema
-      setCachedNodes({ option1: null, option2: null });
-      setCachedEdges({ option1: null, option2: null });
-      fetchAISuggestions(schema).then(suggestions => {
-        setAiSuggestions(suggestions);
-        setIsLoadingSuggestions(false);
-      });
+  // Handle fetching AI suggestions manually
+  const handleFetchSuggestions = useCallback(async () => {
+    if (!schema?.entities || schema.entities.length === 0) {
+      return;
     }
-  }, [schema, aiSuggestionsEnabled]);
+    
+    setIsLoadingSuggestions(true);
+    // Clear previous suggestions and cache
+    setSuggestionNodes([]);
+    setSuggestionEdges([]);
+    setCachedNodes({ option1: null, option2: null });
+    setCachedEdges({ option1: null, option2: null });
+    
+    const suggestions = await fetchAISuggestions(schema, rejectedSuggestions, previouslySuggested);
+    if (suggestions) {
+      setAiSuggestions(suggestions);
+      
+      // Track which tables were suggested in this response
+      const suggestedTableNames: string[] = [];
+      if (suggestions.option_1?.new_table?.name) {
+        suggestedTableNames.push(suggestions.option_1.new_table.name);
+      }
+      if (suggestions.option_2?.merged_table?.name) {
+        suggestedTableNames.push(suggestions.option_2.merged_table.name);
+      }
+      
+      // Add to previously suggested list (avoid duplicates)
+      if (suggestedTableNames.length > 0) {
+        setPreviouslySuggested(prev => {
+          const normalizedNew = suggestedTableNames.map(n => n.toLowerCase().trim());
+          const normalizedPrev = prev.map(p => p.toLowerCase().trim());
+          const toAdd = suggestedTableNames.filter(name => 
+            !normalizedPrev.includes(name.toLowerCase().trim())
+          );
+          return [...prev, ...toAdd];
+        });
+      }
+    }
+    setIsLoadingSuggestions(false);
+  }, [schema, rejectedSuggestions, previouslySuggested]);
+  
+  // Handle rejecting a suggestion
+  const handleRejectSuggestion = useCallback((nodeId: string) => {
+    // Find the node in current state to extract table name
+    setSuggestionNodes(prev => {
+      const node = prev.find(n => n.id === nodeId);
+      if (!node) return prev;
+      
+      const nodeData = node.data as TableNodeData & { originalTable?: any };
+      const tableName = nodeData.originalTable?.name || nodeData.tableName || nodeId.replace('suggestion_', '');
+      
+      console.log('Rejecting suggestion:', tableName);
+      
+      // Schedule state updates after this setState completes
+      setTimeout(() => {
+        // Add to rejected suggestions list (normalize for consistency)
+        const normalizedTableName = tableName.toLowerCase().trim();
+        setRejectedSuggestions(rejected => {
+          const normalizedRejected = rejected.map(r => r.toLowerCase().trim());
+          if (!normalizedRejected.includes(normalizedTableName)) {
+            console.log('Adding to rejected list:', tableName);
+            return [...rejected, tableName];
+          }
+          console.log('Already in rejected list:', tableName);
+          return rejected;
+        });
+        
+        // Clear AI suggestions to prevent regeneration
+        setAiSuggestions(null);
+        
+        // Clear cache (no longer needed since we only show one suggestion)
+        setCachedNodes({ option1: null, option2: null });
+        setCachedEdges({ option1: null, option2: null });
+      }, 0);
+      
+      return prev.filter(n => n.id !== nodeId);
+    });
+    
+    // Remove edges connected to this node
+    setSuggestionEdges(prev => prev.filter(e => e.source !== nodeId && e.target !== nodeId));
+  }, []);
 
-  // Convert suggestions into nodes and edges for rendering - ONLY WHEN NOT LOADING - WITH CACHING
+  // Convert suggestions into nodes and edges for rendering - ONLY WHEN NOT LOADING
+  // Show only ONE suggestion at a time (randomly pick between option 1 and 2)
   useEffect(() => {
     // Don't update suggestions while still loading
     if (isLoadingSuggestions) {
       return;
     }
-    
-    // Check if we already have this cached
-    if (activeSuggestionOption === 1 && cachedNodes.option1 && cachedEdges.option1) {
-      console.log('Using cached Option 1');
-      setSuggestionNodes(cachedNodes.option1);
-      setSuggestionEdges(cachedEdges.option1);
-      return;
-    }
-    
-    if (activeSuggestionOption === 2 && cachedNodes.option2 && cachedEdges.option2) {
-      console.log('Using cached Option 2');
-      setSuggestionNodes(cachedNodes.option2);
-      setSuggestionEdges(cachedEdges.option2);
-      return;
-    }
-    
-    console.log('Computing new suggestion nodes/edges for option:', activeSuggestionOption);
     
     if (!aiSuggestions) {
       console.log('No suggestions available');
@@ -864,144 +937,128 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
       return;
     }
     
-    if (activeSuggestionOption === 1) {
-      // Option 1: Add new table
-      const option1 = aiSuggestions?.option_1;
-      console.log('Option 1 data:', option1);
-      if (option1?.new_table) {
-        const newTable = option1.new_table;
-        
-        // Find a smart position (top-right area) that doesn't overlap
-        const existingNodes = nodes;
-        const maxX = Math.max(...existingNodes.map(n => n.position.x), 0);
-        const maxY = Math.max(...existingNodes.map(n => n.position.y), 0);
-        
-        // Calculate fixed size based on fields like regular tables
-        const fieldCount = (newTable.fields || []).length;
-        const fixedWidth = 300;
-        const fixedHeight = Math.max(200, 120 + fieldCount * 32);
-        
-        const suggestionNode: Node = {
-          id: `suggestion_${newTable.name}`,
-          type: 'tableNode',
-          position: { x: maxX + 450, y: 50 },
-          data: {
-            tableName: newTable.name,
-            fields: newTable.fields || [],
-            color: { bg: 'hsl(var(--card))', border: '#3b82f6', text: 'hsl(var(--foreground))' },
-            isSuggestion: true,
-            originalTable: newTable,
-          },
-          selectable: true,
-          draggable: false,
-          width: fixedWidth,
-          height: fixedHeight,
-          style: {
-            opacity: 0.6,
-            border: '2px dashed #3b82f6',
-            boxShadow: '0 0 16px rgba(59, 130, 246, 0.4)',
-            cursor: 'pointer',
-            width: fixedWidth,
-            height: fixedHeight,
-          },
-        };
-        console.log('Created suggestion node:', suggestionNode);
-        const suggestionNodeArray = [suggestionNode];
-        setSuggestionNodes(suggestionNodeArray);
-        setCachedNodes(prev => ({ ...prev, option1: suggestionNodeArray }));
-
-        // Create edges for connections - point TO the existing table
-        const newEdges: Edge[] = (option1.connections || []).map((conn: any, idx: number) => ({
-          id: `suggestion_edge_${idx}`,
-          source: `suggestion_${newTable.name}`,
-          target: conn.to,
-          type: 'straight' as const,
-          animated: false,
-          markerEnd: {
-            type: 'arrowclosed' as const,
-            width: 20,
-            height: 20,
-            color: '#3b82f6',
-          },
-          style: {
-            stroke: '#3b82f6',
-            strokeWidth: 2,
-            opacity: 0.5,
-            strokeDasharray: '8,4',
-          },
-        }));
-        setSuggestionEdges(newEdges);
-        setCachedEdges(prev => ({ ...prev, option1: newEdges }));
-      }
-    } else if (activeSuggestionOption === 2) {
-      // Option 2: Merge tables
-      const option2 = aiSuggestions?.option_2;
-      if (option2?.merged_table) {
-        const mergedTable = option2.merged_table;
-        
-        // Position the merged table in a smart location (lower right)
-        const existingNodes = nodes;
-        const maxX = Math.max(...existingNodes.map(n => n.position.x), 0);
-        const maxY = Math.max(...existingNodes.map(n => n.position.y), 0);
-        
-        // Calculate fixed size based on fields like regular tables
-        const fieldCount = (mergedTable.fields || []).length;
-        const fixedWidth = 300;
-        const fixedHeight = Math.max(200, 120 + fieldCount * 32);
-        
-        const suggestionNode: Node = {
-          id: `suggestion_${mergedTable.name}`,
-          type: 'tableNode',
-          position: { x: maxX + 450, y: 350 },
-          data: {
-            tableName: mergedTable.name,
-            fields: mergedTable.fields || [],
-            color: { bg: 'hsl(var(--card))', border: '#10b981', text: 'hsl(var(--foreground))' },
-            isSuggestion: true,
-            originalTable: mergedTable,
-          },
-          selectable: true,
-          draggable: false,
-          width: fixedWidth,
-          height: fixedHeight,
-          style: {
-            opacity: 0.6,
-            border: '2px dashed #10b981',
-            boxShadow: '0 0 16px rgba(16, 185, 129, 0.4)',
-            cursor: 'pointer',
-            width: fixedWidth,
-            height: fixedHeight,
-          },
-        };
-        const suggestionNodeArray = [suggestionNode];
-        setSuggestionNodes(suggestionNodeArray);
-        setCachedNodes(prev => ({ ...prev, option2: suggestionNodeArray }));
-
-        // Create edges for connections - point TO other tables
-        const newEdges: Edge[] = (option2.connections || []).map((conn: any, idx: number) => ({
-          id: `suggestion_edge_${idx}`,
-          source: `suggestion_${mergedTable.name}`,
-          target: conn.to,
-          type: 'straight' as const,
-          animated: false,
-          markerEnd: {
-            type: 'arrowclosed' as const,
-            width: 20,
-            height: 20,
-            color: '#10b981',
-          },
-          style: {
-            stroke: '#10b981',
-            strokeWidth: 2,
-            opacity: 0.5,
-            strokeDasharray: '8,4',
-          },
-        }));
-        setSuggestionEdges(newEdges);
-        setCachedEdges(prev => ({ ...prev, option2: newEdges }));
+    // Filter out rejected suggestions and pick between option 1 and option 2
+    let selectedOption = null;
+    let isOption1 = false;
+    
+    // Normalize table names for comparison (lowercase, trim)
+    const normalizeTableName = (name: string) => name.toLowerCase().trim();
+    
+    // Only filter out explicitly rejected tables on the frontend
+    // The backend handles previously suggested uniqueness
+    const normalizedRejected = rejectedSuggestions.map(normalizeTableName);
+    
+    console.log('Checking suggestions:', {
+      rejectedSuggestions,
+      previouslySuggested,
+      option1: aiSuggestions?.option_1?.new_table?.name,
+      option2: aiSuggestions?.option_2?.merged_table?.name
+    });
+    
+    // Check option 1 first (prefer it if available and not explicitly rejected)
+    if (aiSuggestions?.option_1?.new_table) {
+      const tableName = aiSuggestions.option_1.new_table.name;
+      const normalizedName = normalizeTableName(tableName);
+      if (!normalizedRejected.includes(normalizedName)) {
+        selectedOption = aiSuggestions.option_1;
+        isOption1 = true;
+        console.log('Selected option 1:', tableName);
+      } else {
+        console.log('Option 1 rejected (user explicitly rejected):', tableName);
       }
     }
-  }, [aiSuggestions, activeSuggestionOption, isLoadingSuggestions]);
+    
+    // Fall back to option 2 if option 1 was rejected or unavailable
+    if (!selectedOption && aiSuggestions?.option_2?.merged_table) {
+      const tableName = aiSuggestions.option_2.merged_table.name;
+      const normalizedName = normalizeTableName(tableName);
+      if (!normalizedRejected.includes(normalizedName)) {
+        selectedOption = aiSuggestions.option_2;
+        isOption1 = false;
+        console.log('Selected option 2:', tableName);
+      } else {
+        console.log('Option 2 rejected (user explicitly rejected):', tableName);
+      }
+    }
+    
+    if (!selectedOption) {
+      // Both options were explicitly rejected by user
+      console.log('No valid suggestion available - both options explicitly rejected by user');
+      setSuggestionNodes([]);
+      setSuggestionEdges([]);
+      return;
+    }
+    
+    // Get the table from the selected option
+    const table = selectedOption.new_table || selectedOption.merged_table;
+    
+    if (table) {
+      // Find a smart position that doesn't overlap
+      const existingNodes = nodes;
+      const maxX = Math.max(...existingNodes.map(n => n.position.x), 0);
+      const maxY = Math.max(...existingNodes.map(n => n.position.y), 0);
+      
+      // Calculate fixed size based on fields like regular tables
+      const fieldCount = (table.fields || []).length;
+      const fixedWidth = 300;
+      const fixedHeight = Math.max(200, 120 + fieldCount * 32);
+      
+      // Use different colors for option 1 vs option 2
+      const borderColor = isOption1 ? '#3b82f6' : '#10b981';
+      const shadowColor = isOption1 ? 'rgba(59, 130, 246, 0.4)' : 'rgba(16, 185, 129, 0.4)';
+      const yPosition = isOption1 ? 50 : 350;
+      
+      const suggestionNode: Node = {
+        id: `suggestion_${table.name}`,
+        type: 'tableNode',
+        position: { x: maxX + 450, y: yPosition },
+        data: {
+          tableName: table.name,
+          fields: table.fields || [],
+          color: { bg: 'hsl(var(--card))', border: borderColor, text: 'hsl(var(--foreground))' },
+          isSuggestion: true,
+          originalTable: table,
+          onReject: handleRejectSuggestion,
+        },
+        selectable: true,
+        draggable: true,
+        width: fixedWidth,
+        height: fixedHeight,
+        style: {
+          opacity: 0.6,
+          border: `2px dashed ${borderColor}`,
+          boxShadow: `0 0 16px ${shadowColor}`,
+          cursor: 'pointer',
+          width: fixedWidth,
+          height: fixedHeight,
+        },
+      };
+      
+      setSuggestionNodes([suggestionNode]);
+
+      // Create edges for connections
+      const newEdges: Edge[] = (selectedOption.connections || []).map((conn: any, idx: number) => ({
+        id: `suggestion_edge_${idx}`,
+        source: `suggestion_${table.name}`,
+        target: conn.to,
+        type: 'straight' as const,
+        animated: false,
+        markerEnd: {
+          type: 'arrowclosed' as const,
+          width: 20,
+          height: 20,
+          color: borderColor,
+        },
+        style: {
+          stroke: borderColor,
+          strokeWidth: 2,
+          opacity: 0.5,
+          strokeDasharray: '8,4',
+        },
+      }));
+      setSuggestionEdges(newEdges);
+    }
+  }, [aiSuggestions, isLoadingSuggestions, handleRejectSuggestion, nodes, rejectedSuggestions, previouslySuggested]);
 
   // Convert a ghost node into a regular table node
   const convertGhostToRealTable = useCallback((ghostNode: Node): Node => {
@@ -1078,29 +1135,60 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
         return prevEdges;
       });
       
-      // Remove the suggestion from the ghosts
+      // Remove the suggestion from the ghosts and clear AI suggestions to prevent regeneration
       setSuggestionNodes([]);
       setSuggestionEdges([]);
+      setAiSuggestions(null);
+      
+      // Also add the table name to rejected suggestions so it won't be suggested again
+      const tableName = nodeData.originalTable?.name || nodeData.tableName || node.id.replace('suggestion_', '');
+      setRejectedSuggestions(prev => {
+        if (!prev.includes(tableName)) {
+          return [...prev, tableName];
+        }
+        return prev;
+      });
     }
   }, [suggestionEdges, convertGhostToRealTable]);
 
   const onNodesChange = useCallback((changes: any) => {
+    // Update real nodes
     setNodes((nds) => {
       const updated = [...nds];
       changes.forEach((change: any) => {
         const index = updated.findIndex((n) => n.id === change.id);
         if (index !== -1) {
-      if (change.type === 'position' && change.position) {
+          if (change.type === 'position' && change.position) {
             updated[index] = { ...updated[index], position: change.position };
           } else if (change.type === 'resize' && change.dimensions) {
-            // Handle NodeResizer resize events
             updated[index] = {
               ...updated[index],
               width: change.dimensions.width,
               height: change.dimensions.height,
             };
           } else if (change.type === 'select') {
-            // Handle node selection
+            updated[index] = { ...updated[index], selected: change.selected };
+          }
+        }
+      });
+      return updated;
+    });
+
+    // Update suggestion nodes (so dragging them persists)
+    setSuggestionNodes((snds) => {
+      const updated = [...snds];
+      changes.forEach((change: any) => {
+        const index = updated.findIndex((n) => n.id === change.id);
+        if (index !== -1) {
+          if (change.type === 'position' && change.position) {
+            updated[index] = { ...updated[index], position: change.position };
+          } else if (change.type === 'resize' && change.dimensions) {
+            updated[index] = {
+              ...updated[index],
+              width: change.dimensions.width,
+              height: change.dimensions.height,
+            };
+          } else if (change.type === 'select') {
             updated[index] = { ...updated[index], selected: change.selected };
           }
         }
@@ -1303,52 +1391,24 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
         Add Table
       </button>
       
-      {/* AI Suggestions Toggle */}
+      {/* AI Suggestions Button - One-time fetch */}
       <button
-        onClick={() => setAiSuggestionsEnabled(!aiSuggestionsEnabled)}
-        className={`absolute top-20 right-4 z-50 px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 ${
-          aiSuggestionsEnabled
-            ? 'bg-blue-700 hover:bg-blue-800 text-white'
-            : 'bg-blue-600 hover:bg-blue-700 text-white'
-        }`}
+        onClick={handleFetchSuggestions}
+        disabled={isLoadingSuggestions || !schema?.entities || schema.entities.length === 0}
+        className="absolute top-20 right-4 z-50 px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <Sparkles className="h-4 w-4" />
-        AI Suggestions {aiSuggestionsEnabled ? 'ON' : 'OFF'}
+        {isLoadingSuggestions ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Generating...
+          </>
+        ) : (
+          <>
+            <Sparkles className="h-4 w-4" />
+            Get AI Suggestions
+          </>
+        )}
       </button>
-
-      {/* Option 1/2 Toggle Widget - Only show when AI suggestions are enabled and loaded */}
-      {aiSuggestionsEnabled && aiSuggestions && (
-        <div className="absolute top-36 right-4 z-50 bg-white rounded-lg shadow-lg border border-gray-200 p-2 flex items-center gap-2">
-          <button
-            onClick={() => setActiveSuggestionOption(1)}
-            className={`px-3 py-1 rounded text-sm font-medium transition-all ${
-              activeSuggestionOption === 1
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            ← Option 1
-          </button>
-          <div className="h-6 w-px bg-gray-300" />
-          <button
-            onClick={() => setActiveSuggestionOption(2)}
-            className={`px-3 py-1 rounded text-sm font-medium transition-all ${
-              activeSuggestionOption === 2
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Option 2 →
-          </button>
-        </div>
-      )}
-
-      {/* Loading indicator */}
-      {isLoadingSuggestions && (
-        <div className="absolute top-36 right-4 z-50 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
-          Generating suggestions...
-        </div>
-      )}
       
       {/* Update Schema Button */}
       {onSchemaUpdate && (
@@ -1363,19 +1423,18 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
       <ReactFlow
         nodes={(() => {
           // Only show suggestions if loading is complete
-          const shouldShowSuggestions = aiSuggestionsEnabled && aiSuggestions && !isLoadingSuggestions;
+          const shouldShowSuggestions = aiSuggestions && !isLoadingSuggestions;
           const finalNodes = shouldShowSuggestions ? [...nodes, ...suggestionNodes] : nodes;
           console.log('Rendering ReactFlow with nodes:', { 
             nodeCount: finalNodes.length, 
             suggestionNodeCount: suggestionNodes.length,
-            aiSuggestionsEnabled,
             hasSuggestions: !!aiSuggestions,
             isLoadingSuggestions
           });
           return finalNodes;
         })()}
         edges={(() => {
-          const shouldShowSuggestions = aiSuggestionsEnabled && aiSuggestions && !isLoadingSuggestions;
+          const shouldShowSuggestions = aiSuggestions && !isLoadingSuggestions;
           return shouldShowSuggestions ? [...edges, ...suggestionEdges] : edges;
         })()}
         onNodesChange={onNodesChange}
