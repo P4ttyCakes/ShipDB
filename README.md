@@ -1,204 +1,115 @@
-# 🚢 ShipDB - Universal Database Architect
+# ShipDB
 
-**ShipDB** is a WORLD-CLASS database architect that creates DETAILED, FOOL-PROOF, DEPLOYABLE databases for ANY business sector. From simple startups to enterprise platforms, ShipDB eliminates ALL database complexity while providing the RIGHT level of sophistication for your needs.
+ShipDB fully automates the database pipeline for new startup and business founders, helping design, visualize, and deploy schemas with a FastAPI backend and a React + TypeScript frontend.
 
-## 🎯 Universal Business Support
+Current support for Supabase and AWS deployment, with PostgreSQL, DynamoDB, and JSON schema code provided. 
 
-ShipDB understands and creates perfect databases for **EVERY** business sector:
+## Tech stack
 
-- **🏥 Healthcare & Medical** - HIPAA compliance, patient records, appointments
-- **💰 Finance & Banking** - PCI compliance, transactions, security
-- **🏭 Manufacturing & Supply Chain** - Inventory, suppliers, quality control
-- **🛒 E-commerce & Retail** - Products, orders, payments, inventory
-- **🏠 Real Estate & Property** - Listings, agents, transactions
-- **🎓 Education & Learning** - Students, courses, assessments
-- **🎬 Media & Entertainment** - Content, subscriptions, analytics
-- **💼 Professional Services** - Clients, projects, billing
-- **🏛️ Government & Public Sector** - Citizens, services, compliance
-- **💻 SaaS & Technology** - Multi-tenancy, subscriptions, APIs
-- **🏨 Hospitality & Tourism** - Bookings, guests, services
-- **🌾 Agriculture & Food** - Crops, suppliers, traceability
-- **🚚 Transportation & Logistics** - Vehicles, routes, tracking
-- **⚡ Energy & Utilities** - Customers, usage, billing
-- **⚖️ Legal & Law** - Cases, clients, documents
-- **📈 Marketing & Advertising** - Campaigns, leads, ROI
-- **👥 Human Resources** - Employees, payroll, performance
-- **And ANY other business sector or use case!**
+- Backend: FastAPI (Python), Pydantic, Uvicorn
+- Services: PostgreSQL, DynamoDB, Supabase deployment services
+- Frontend: React 18, TypeScript, Vite, TailwindCSS, shadcn/ui
 
-## ✨ Enhanced Features
-
-- **🤖 AI-Powered Universal Design**: Adapts to ANY business type and size
-- **📊 Comprehensive Database Features**: 
-  - Complete CRUD operations with proper relationships
-  - User management and authentication
-  - Audit trails and change tracking
-  - Soft deletes and data retention
-  - Performance indexes and query optimization
-  - Data validation and constraints
-  - Backup and recovery strategies
-  - Security and encryption (field-level when needed)
-  - Compliance features (GDPR, HIPAA, SOX, PCI-DSS)
-  - Real-time features when required
-  - Analytics and reporting capabilities
-  - Integration points for external systems
-
-- **🏗️ Enterprise Architecture**: 
-  - Hybrid database architectures
-  - Redis caching strategies
-  - Elasticsearch search integration
-  - Performance monitoring and alerting
-  - Horizontal and vertical scaling
-  - Multi-region deployment support
-
-- **🔒 Security & Compliance**: 
-  - Field-level encryption
-  - Role-based access control
-  - API rate limiting
-  - Compliance frameworks (GDPR, HIPAA, PCI-DSS, SOX)
-  - Audit logging and change tracking
-
-- **⚡ Multi-Database Support**: PostgreSQL, DynamoDB
-- **☁️ Cloud Deployment**: Automatic AWS deployment (RDS, DynamoDB)
-- **📈 Schema Visualization**: ERD diagrams for visual schema review
-- **📋 Export Options**: Download SQL scripts, JSON schemas, and connection info
-
-## 🛠 Tech Stack
-
-### Backend
-- **FastAPI** (Python) - High-performance async API
-- **GPT-5 via OpenAI** - AI agent for requirements gathering
-- **Boto3** - AWS infrastructure management
-- **PyMongo, SQLAlchemy, psycopg2** - Database drivers
-
-### Frontend
-- **React 18** with TypeScript
-- **Vite** - Fast build tool and dev server
-- **ReactFlow** - Interactive schema visualization
-- **TailwindCSS** - Utility-first styling
-- **shadcn/ui** - UI component library
-
-## 📁 Project Structure
+## Project structure
 
 ```
 ShipDB/
-├── backend/              # FastAPI application
+├── backend/
 │   ├── app/
-│   │   ├── api/routes/   # API endpoints
-│   │   ├── services/     # Business logic
-│   │   ├── models/       # Pydantic models
-│   │   └── utils/        # Helper functions
-│   └── tests/            # Test suite
+│   │   ├── api/
+│   │   │   └── routes/
+│   │   │       ├── deploy.py
+│   │   │       ├── projects.py
+│   │   │       ├── schema.py
+│   │   │       └── visualization.py
+│   │   ├── core/
+│   │   │   └── config.py
+│   │   ├── main.py
+│   │   ├── models/
+│   │   │   └── deployment.py
+│   │   └── services/
+│   │       ├── ai_agent.py
+│   │       ├── schema_generator.py
+│   │       └── deployment/
+│   │           ├── base.py
+│   │           ├── factory.py
+│   │           ├── manager.py
+│   │           ├── dynamodb.py
+│   │           ├── dynamodb_service.py
+│   │           ├── postgresql.py
+│   │           ├── postgresql_service.py
+│   │           └── supabase_service.py
+│   ├── requirements.txt
+│   └── venv/
 │
-├── frontend/             # React + TypeScript + Vite
+├── frontend/
 │   ├── src/
-│   │   ├── components/   # React components
-│   │   ├── api/          # API client
-│   │   └── styles/       # CSS
-│   ├── package.json      # Dependencies
-│   └── index.html
+│   │   ├── components/
+│   │   │   ├── ChartDBViewer.tsx
+│   │   │   ├── InteractiveSchemaVisualization.tsx
+│   │   │   ├── SchemaVisualization.tsx
+│   │   │   └── ui/ (shadcn components)
+│   │   ├── pages/
+│   │   │   ├── Chat.tsx
+│   │   │   ├── Index.tsx
+│   │   │   └── NotFound.tsx
+│   │   └── main.tsx
+│   ├── package.json
+│   └── vite.config.ts
 │
-└── docs/                 # Documentation
+├── start_backend.sh
+├── start_frontend.sh
+├── CONFIGURATION.md
+├── SETUP.md
+└── SUPABASE_INTEGRATION.md
 ```
 
-## 🚀 Quick Start
+## Key backend components
 
-### Prerequisites
+- `app/main.py`: FastAPI app entry point
+- `app/api/routes/*.py`: API endpoints for deploy, projects, schema, visualization
+- `app/services/ai_agent.py`: AI-driven requirements parsing and schema guidance
+- `app/services/deployment/*`: Deployment abstractions and providers (PostgreSQL, DynamoDB, Supabase)
+- `app/services/schema_generator.py`: Schema generation utilities
 
-- Python 3.10+
-- Node.js 16+ and npm
-- AWS Account with credentials configured
-- OpenAI API key (or Anthropic/Gemini API key)
+## Key frontend components
 
-### Installation
+- `src/components/SchemaVisualization.tsx` and `InteractiveSchemaVisualization.tsx`: schema/ERD views
+- `src/components/ChartDBViewer.tsx`: chart-based table view
+- `src/components/ui/*`: shadcn/ui primitives
+- `src/pages/*`: main routes (chat, index, not found)
+
+## Getting started
+
+Prerequisites: Python 3.12+, Node.js 18+.
+
+Using the helper scripts (recommended):
 
 ```bash
-# Clone the repository
-git clone https://github.com/P4ttyCakes/ShipDB.git
-cd ShipDB
-
-# Create environment file
-# See CONFIGURATION.md for detailed setup instructions
-# You'll need to create a .env file with your API keys
-
-# Verify setup (optional)
-./verify_setup.sh
-
-# Start the application
-./start_backend.sh    # In one terminal
-./start_frontend.sh   # In another terminal
-
-# Test the API (optional, after starting backend)
-python3 test_api.py
+./start_backend.sh   # starts FastAPI (Uvicorn)
+./start_frontend.sh  # starts Vite dev server
 ```
 
-### Manual Setup (Alternative)
+Manual setup (alternative):
 
 ```bash
-# Backend setup
+# Backend
 cd backend
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your API keys
-
-# Start backend
 uvicorn app.main:app --reload
-```
 
-### Frontend Setup
-
-```bash
-cd frontend
+# Frontend
+cd ../frontend
 npm install
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173` (or another port if 5173 is in use).
+API docs are available at `http://localhost:8000/docs` when the backend is running. The frontend dev server defaults to `http://localhost:5173`.
 
-**Note**: The frontend uses React with TypeScript, Vite, and ReactFlow for the interactive schema visualization. Make sure you have Node.js (v16 or higher) installed.
+## Configuration
 
-## 📖 Usage
+See `CONFIGURATION.md`, `SETUP.md`, and `SUPABASE_INTEGRATION.md` for environment variables, provider setup, and credentials.
 
-1. **Start a Project**: Click "New Project" on the frontend
-2. **Answer Questions**: Chat with the AI about your database needs
-3. **Review Schema**: View generated schema and ERD diagram
-4. **Deploy**: Click deploy to create your AWS database
-5. **Connect**: Copy connection info and start coding!
 
-## 🔧 Configuration
-
-See [CONFIGURATION.md](CONFIGURATION.md) for detailed setup instructions including:
-- API key setup for OpenAI, Anthropic, and Gemini
-- AWS credentials configuration
-- Environment variable reference
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-1. **Backend won't start**: Make sure you have Python 3.10+ and all dependencies installed
-2. **Import errors**: Run `./verify_setup.sh` to check your setup
-3. **API errors**: Ensure your `.env` file has the correct API keys
-4. **Frontend not loading**: Make sure you've run `npm install` and `npm run dev` in the frontend directory
-5. **Node modules missing**: Run `npm install` in the frontend directory
-
-### Getting Help
-
-- Check the API documentation at `http://localhost:8000/docs` when the backend is running
-- Run `./verify_setup.sh` to diagnose setup issues
-- Run `python3 test_api.py` to test API endpoints
-
-## 🤝 Contributing
-
-This is a hackathon MVP. Pull requests welcome!
-
-## 📄 License
-
-MIT
-
-## 🙏 Acknowledgments
-
-Built with love for rapid prototyping and developer productivity.
