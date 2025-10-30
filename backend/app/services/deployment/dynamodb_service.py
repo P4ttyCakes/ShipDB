@@ -1,7 +1,7 @@
 import boto3
 import os
-from app.services.deployment.base import BaseDeploymentService
-from app.models.deployment import DeploymentRequest, DeploymentResponse
+from backend.app.services.deployment.base import BaseDeploymentService
+from backend.app.models.deployment import DeploymentRequest, DeploymentResponse
 from loguru import logger
 
 

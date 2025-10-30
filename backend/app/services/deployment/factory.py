@@ -1,4 +1,4 @@
-from app.models.deployment import DatabaseType, DeploymentRequest
+from backend.app.models.deployment import DatabaseType, DeploymentRequest
 from .postgresql_service import PostgreSQLRDSService
 from .dynamodb_service import DynamoDBService
 from .supabase_service import SupabaseDeploymentService

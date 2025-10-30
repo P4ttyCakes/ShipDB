@@ -3,8 +3,8 @@ from fastapi import Body
 from loguru import logger
 from typing import Any, Dict
 
-from app.services.schema_generator import generate_all, validate_spec, to_postgres_sql
-from app.services import ai_agent
+from backend.app.services.schema_generator import generate_all, validate_spec, to_postgres_sql
+from backend.app.services import ai_agent
 
 router = APIRouter()
 

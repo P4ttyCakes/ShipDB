@@ -4,12 +4,12 @@ from typing import Optional, Dict, Any
 import uuid
 from loguru import logger
 
-from app.services.ai_agent import agent_service
-from app.services.schema_generator import generate_all
-from app.models.deployment import DeploymentRequest, DeploymentResponse, DatabaseType
-from app.services.deployment.factory import DeploymentFactory
+from backend.app.services.ai_agent import get_agent
+from backend.app.services.schema_generator import generate_all
+from backend.app.models.deployment import DeploymentRequest, DeploymentResponse, DatabaseType
+from backend.app.services.deployment.factory import DeploymentFactory
 import os
-from app.core.config import settings
+from backend.app.core.config import settings
 
 router = APIRouter()
 
@@ -84,7 +84,7 @@ class ChatFinishResponse(BaseModel):
 async def chat_start(payload: ChatStartRequest):
     try:
         logger.info(f"Starting new session: name='{payload.name}', description='{payload.description}'")
-        out = agent_service.start_session(payload.name, payload.description)
+        out = get_agent().start_session(payload.name, payload.description)
         logger.info(f"Session started successfully: session_id='{out.get('session_id')}'")
         return out
     except Exception as e:
@@ -106,7 +106,7 @@ async def chat_next(payload: ChatNextRequest):
         
         logger.info(f"Calling agent_service.next_turn with session_id='{session_id_str}', answer='{answer_str[:100]}...'")
         try:
-            out = agent_service.next_turn(session_id_str, answer_str)
+            out = get_agent().next_turn(session_id_str, answer_str)
             logger.info(f"agent_service.next_turn succeeded")
         except ValueError as ve:
             logger.error(f"agent_service.next_turn failed with ValueError: {ve}")
@@ -140,7 +140,7 @@ async def chat_next(payload: ChatNextRequest):
 @router.post("/new_project/finish", response_model=ChatFinishResponse)
 async def chat_finish(payload: ChatFinishRequest):
     try:
-        out = agent_service.finalize(payload.session_id)
+        out = get_agent().finalize(payload.session_id)
         spec = out.get("spec", {})
         
         # Try to generate all schema formats, but don't fail if it doesn't work

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from app.models.deployment import DeploymentRequest, DeploymentResponse
+from backend.app.models.deployment import DeploymentRequest, DeploymentResponse
 
 
 class BaseDeploymentService(ABC):

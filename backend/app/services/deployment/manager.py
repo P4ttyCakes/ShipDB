@@ -1,8 +1,8 @@
 from typing import Dict, Any
 
-from app.services.deployment.dynamodb import deploy_dynamodb
-from app.services.deployment.postgresql import deploy_postgresql
-from app.services.schema_generator import to_dynamodb_defs, to_postgres_sql
+from backend.app.services.deployment.dynamodb import deploy_dynamodb
+from backend.app.services.deployment.postgresql import deploy_postgresql
+from backend.app.services.schema_generator import to_dynamodb_defs, to_postgres_sql
 
 
 def deploy(db_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:

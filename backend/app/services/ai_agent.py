@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List
 from uuid import uuid4
 
 from loguru import logger
-from app.core.config import settings
+from backend.app.core.config import settings
 
 try:
     # Anthropic SDK for Claude
@@ -712,4 +712,11 @@ CRITICAL: Respond with ONLY valid JSON. No other text before or after."""
             }
 
 
-agent_service = AIAgentService()
+# Lazy initialize the agent to avoid crashing app startup if SDK/env isn't ready
+agent_service: AIAgentService | None = None
+
+def get_agent() -> AIAgentService:
+    global agent_service
+    if agent_service is None:
+        agent_service = AIAgentService()
+    return agent_service

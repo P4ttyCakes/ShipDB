@@ -5,7 +5,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 import boto3
 from botocore.exceptions import ClientError
 
-from app.core.config import settings
+from backend.app.core.config import settings
 
 
 def _create_rds_instance(aws_config: Dict[str, Any], db_name: str) -> Dict[str, Any]:

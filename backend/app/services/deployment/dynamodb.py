@@ -3,7 +3,7 @@ from loguru import logger
 import botocore
 import boto3
 
-from app.core.config import settings
+from backend.app.core.config import settings
 
 
 def _ensure_table(client, table_def: Dict[str, Any]) -> Dict[str, Any]:

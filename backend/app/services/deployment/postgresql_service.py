@@ -1,8 +1,8 @@
 import boto3
 from botocore.exceptions import ClientError
-from app.core.config import settings
-from app.services.deployment.base import BaseDeploymentService
-from app.models.deployment import DeploymentRequest, DeploymentResponse
+from backend.app.core.config import settings
+from backend.app.services.deployment.base import BaseDeploymentService
+from backend.app.models.deployment import DeploymentRequest, DeploymentResponse
 from loguru import logger
 
 
@@ -108,4 +108,7 @@ class PostgreSQLRDSService(BaseDeploymentService):
         import string
         alphabet = string.ascii_letters + string.digits + "!@#$%"
         return ''.join(secrets.choice(alphabet) for _ in range(16))
+
+
+
 

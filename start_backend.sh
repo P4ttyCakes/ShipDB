@@ -24,13 +24,16 @@ source backend/venv/bin/activate
 
 # Install dependencies
 echo "📥 Installing dependencies..."
-cd backend
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
-# Check for .env file
-if [ ! -f ".env" ]; then
+# Check for .env file in either backend/.env or repo root .env
+if [ -f "backend/.env" ]; then
+    ENV_PATH="backend/.env"
+elif [ -f ".env" ]; then
+    ENV_PATH=".env"
+else
     echo "⚠️  Warning: No .env file found. Please create one with your API keys."
-    echo "   You can copy .env.example and fill in your keys."
+    echo "   You can copy backend/env_template.txt to backend/.env and fill in your keys."
 fi
 
 # Start the server
@@ -40,6 +43,4 @@ echo "   API docs will be available at: http://localhost:8000/docs"
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
-
-cd backend
-uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8000

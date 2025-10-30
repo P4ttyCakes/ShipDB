@@ -2,8 +2,12 @@ from pydantic_settings import BaseSettings
 from typing import Optional
 from dotenv import load_dotenv, find_dotenv
 
-# Load the nearest .env file (searching upwards), so both repo root and backend/.env work
-load_dotenv(find_dotenv(usecwd=True))
+# Load environment variables
+# 1) Try nearest .env by searching upwards from current working directory
+# 2) If not found (common when starting from repo root), also try backend/.env explicitly
+loaded = load_dotenv(find_dotenv(usecwd=True))
+if not loaded:
+    load_dotenv("backend/.env")
 
 
 class Settings(BaseSettings):

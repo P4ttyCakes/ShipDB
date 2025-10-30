@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
-from app.models.deployment import DeploymentRequest, DeploymentResponse
-from app.services.deployment.factory import DeploymentFactory
-from app.core.config import settings
+from backend.app.models.deployment import DeploymentRequest, DeploymentResponse
+from backend.app.services.deployment.factory import DeploymentFactory
+from backend.app.core.config import settings
 from loguru import logger
 import os
 
