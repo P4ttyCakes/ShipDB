@@ -4,6 +4,10 @@ ShipDB fully automates the database pipeline for new startup and business founde
 
 Current support for Supabase and AWS deployment, with PostgreSQL, DynamoDB, and JSON schema code provided. 
 
+## Authors 
+
+Created by Ahaan Shah <ahaansh@umich.edu>, Patrick Lu <Patlu@umich.edu>, and Nick Wang <wangnick@umich.edu>
+
 ## Tech stack
 
 - Backend: FastAPI (Python), Pydantic, Uvicorn
