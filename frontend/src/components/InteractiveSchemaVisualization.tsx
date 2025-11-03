@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Node,
@@ -17,7 +17,7 @@ import {
   addEdge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Trash2, Plus, Sparkles, X, Loader2 } from 'lucide-react';
+import { Trash2, Plus, Sparkles, X, Loader2, Square } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -559,11 +559,12 @@ const calculateHierarchicalLayout = (entities: any[], edges: Edge[]) => {
 };
 
 // API function to fetch AI suggestions
-const fetchAISuggestions = async (schemaData: any, rejectedSuggestions: string[] = [], previouslySuggested: string[] = []) => {
+const fetchAISuggestions = async (schemaData: any, rejectedSuggestions: string[] = [], previouslySuggested: string[] = [], signal?: AbortSignal) => {
   try {
     const response = await fetch('http://localhost:8000/api/schema/suggestions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: signal, // Add this line to support cancellation
       body: JSON.stringify({ 
         schema: schemaData,
         rejected_suggestions: rejectedSuggestions,
@@ -573,6 +574,11 @@ const fetchAISuggestions = async (schemaData: any, rejectedSuggestions: string[]
     if (!response.ok) throw new Error('Failed to fetch suggestions');
     return await response.json();
   } catch (error) {
+    // Don't log abort errors as they're intentional
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('Fetch aborted');
+      return null;
+    }
     console.error('Error fetching AI suggestions:', error);
     return null;
   }
@@ -589,6 +595,12 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
   const [cachedEdges, setCachedEdges] = useState<{ option1: Edge[] | null, option2: Edge[] | null }>({ option1: null, option2: null });
   const [rejectedSuggestions, setRejectedSuggestions] = useState<string[]>([]);
   const [previouslySuggested, setPreviouslySuggested] = useState<string[]>([]);
+  const [isAutoSuggesting, setIsAutoSuggesting] = useState(false);
+  
+  // Refs to track auto-suggestions state, timeout, and abort controller for proper cancellation
+  const isAutoSuggestingRef = useRef(false);
+  const autoFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Handler for when nodes request a size change
   const handleNodeSizeChange = useCallback((nodeId: string, width: number, height: number) => {
@@ -846,6 +858,14 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
       return;
     }
     
+    // Enable auto-suggestions mode
+    setIsAutoSuggesting(true);
+    isAutoSuggestingRef.current = true;
+    
+    // Create new AbortController for this fetch
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    
     setIsLoadingSuggestions(true);
     // Clear previous suggestions and cache
     setSuggestionNodes([]);
@@ -853,8 +873,10 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
     setCachedNodes({ option1: null, option2: null });
     setCachedEdges({ option1: null, option2: null });
     
-    const suggestions = await fetchAISuggestions(schema, rejectedSuggestions, previouslySuggested);
-    if (suggestions) {
+    const suggestions = await fetchAISuggestions(schema, rejectedSuggestions, previouslySuggested, abortController.signal);
+    
+    // Only update if not aborted and auto-suggesting is still enabled
+    if (suggestions && isAutoSuggestingRef.current) {
       setAiSuggestions(suggestions);
       
       // Track which tables were suggested in this response
@@ -1089,6 +1111,78 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
     
     return realNode;
   }, [nodes, handleNodeSizeChange, handleConnect, handleFieldsChange]);
+ 
+  // Helper function to build schema from current nodes state
+  const buildSchemaFromNodes = useCallback((currentNodes: Node[], currentEdges: Edge[]) => {
+    // Filter out suggestion nodes
+    const realNodes = currentNodes.filter(node => {
+      const nodeData = node.data as TableNodeData & { isSuggestion?: boolean };
+      return !nodeData.isSuggestion;
+    });
+
+    // Convert nodes to entities
+    const entities = realNodes.map(node => {
+      let fields = (node.data as TableNodeData).fields || [];
+      
+      // If table has no fields, add a default id field
+      if (fields.length === 0) {
+        fields = [
+          {
+            name: 'id',
+            type: 'uuid',
+            primary_key: true,
+            required: true,
+          }
+        ];
+      }
+      // If table has fields but no primary key, add one to the first field
+      else if (!fields.some((f: any) => f.primary_key)) {
+        fields = fields.map((field: any, idx: number) => 
+          idx === 0 ? { ...field, primary_key: true } : field
+        );
+      }
+      
+      return {
+        name: (node.data as TableNodeData).tableName || node.id,
+        fields: fields,
+      };
+    });
+
+    // Add foreign keys from edges
+    const targetToSourceMap = new Map<string, string>();
+    currentEdges.forEach(edge => {
+      if (edge.target && edge.source) {
+        targetToSourceMap.set(edge.target as string, edge.source as string);
+      }
+    });
+
+    entities.forEach(entity => {
+      const hasForeignKey = entity.fields.some((f: any) => f.foreign_key);
+      const sourceTable = targetToSourceMap.get(entity.name);
+      
+      if (sourceTable && !hasForeignKey) {
+        let fkAdded = false;
+        entity.fields = entity.fields.map((field: any) => {
+          if (!field.foreign_key && !fkAdded) {
+            fkAdded = true;
+            return {
+              ...field,
+              foreign_key: {
+                table: sourceTable,
+                column: 'id',
+              },
+            };
+          }
+          return field;
+        });
+      }
+    });
+
+    return {
+      ...schema,
+      entities: entities,
+    };
+  }, [schema]);
 
   // Handle clicking on a suggestion node to accept it
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
@@ -1143,14 +1237,114 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
       // Also add the table name to rejected suggestions so it won't be suggested again
       const tableName = nodeData.originalTable?.name || nodeData.tableName || node.id.replace('suggestion_', '');
       setRejectedSuggestions(prev => {
-        if (!prev.includes(tableName)) {
-          return [...prev, tableName];
+        const newRejected = !prev.includes(tableName) ? [...prev, tableName] : prev;
+
+        // Also update previously suggested
+        setPreviouslySuggested(prevSuggested => {
+          const normalizedTableName = tableName.toLowerCase().trim();
+          const normalizedPrev = prevSuggested.map(p => p.toLowerCase().trim());
+          if (!normalizedPrev.includes(normalizedTableName)) {
+            return [...prevSuggested, tableName];
+          }
+          return prevSuggested;
+        });
+
+        // Automatically fetch new suggestions after state updates
+        // Use setTimeout to ensure state updates have propagated
+        // Clear any existing timeout first
+        if (autoFetchTimeoutRef.current) {
+          clearTimeout(autoFetchTimeoutRef.current);
         }
-        return prev;
+        
+        autoFetchTimeoutRef.current = setTimeout(async () => {
+          // Clear the timeout reference
+          autoFetchTimeoutRef.current = null;
+          
+          // Only fetch if auto-suggestions are still enabled (check ref for latest value)
+          if (!isAutoSuggestingRef.current) {
+            return;
+          }
+          
+          // Get the latest nodes and edges state by using a callback
+          setNodes((latestNodes) => {
+            setEdges((latestEdges) => {
+              // Double-check again before starting the fetch
+              if (!isAutoSuggestingRef.current) {
+                return latestEdges;
+              }
+              
+              // Build updated schema from the latest nodes and edges
+              const updatedSchema = buildSchemaFromNodes(latestNodes, latestEdges);
+              
+              // Create new AbortController for this fetch
+              const abortController = new AbortController();
+              abortControllerRef.current = abortController;
+              
+              // Fetch new suggestions with updated schema
+              setIsLoadingSuggestions(true);
+              setSuggestionNodes([]);
+              setSuggestionEdges([]);
+              setCachedNodes({ option1: null, option2: null });
+              setCachedEdges({ option1: null, option2: null });
+              
+              fetchAISuggestions(updatedSchema, newRejected, previouslySuggested, abortController.signal).then((suggestions) => {
+                // Triple-check auto-suggestions are still enabled before updating (use ref for latest value)
+                if (!isAutoSuggestingRef.current) {
+                  setIsLoadingSuggestions(false);
+                  return;
+                }
+                
+                if (suggestions) {
+                  // Check one more time right before state update
+                  if (!isAutoSuggestingRef.current) {
+                    setIsLoadingSuggestions(false);
+                    return;
+                  }
+                  
+                  setAiSuggestions(suggestions);
+                  
+                  // Track which tables were suggested
+                  const suggestedTableNames: string[] = [];
+                  if (suggestions.option_1?.new_table?.name) {
+                    suggestedTableNames.push(suggestions.option_1.new_table.name);
+                  }
+                  if (suggestions.option_2?.merged_table?.name) {
+                    suggestedTableNames.push(suggestions.option_2.merged_table.name);
+                  }
+                  
+                  // Add to previously suggested list
+                  if (suggestedTableNames.length > 0) {
+                    setPreviouslySuggested(prev => {
+                      const normalizedNew = suggestedTableNames.map(n => n.toLowerCase().trim());
+                      const normalizedPrev = prev.map(p => p.toLowerCase().trim());
+                      const toAdd = suggestedTableNames.filter(name => 
+                        !normalizedPrev.includes(name.toLowerCase().trim())
+                      );
+                      return [...prev, ...toAdd];
+                    });
+                  }
+                }
+                setIsLoadingSuggestions(false);
+              }).catch((error) => {
+                // Don't log abort errors as they're intentional
+                if (error instanceof Error && error.name !== 'AbortError') {
+                  console.error('Error auto-fetching suggestions:', error);
+                }
+                setIsLoadingSuggestions(false);
+              });
+              
+              return latestEdges;
+            });
+            return latestNodes;
+          });
+        }, 100);
+
+        return newRejected;
       });
     }
-  }, [suggestionEdges, convertGhostToRealTable]);
+  }, [suggestionEdges, convertGhostToRealTable, buildSchemaFromNodes, previouslySuggested]);
 
+       
   const onNodesChange = useCallback((changes: any) => {
     // Update real nodes
     setNodes((nds) => {
@@ -1377,6 +1571,47 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
     });
   }, [nodes, handleNodeSizeChange, handleConnect, handleFieldsChange]);
 
+  // Handle stopping auto-suggestions
+  const handleStopSuggestions = useCallback(() => {
+    // Abort any in-flight fetch requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
+    // Clear any pending timeout
+    if (autoFetchTimeoutRef.current) {
+      clearTimeout(autoFetchTimeoutRef.current);
+      autoFetchTimeoutRef.current = null;
+    }
+    
+    // Disable auto-suggestions
+    setIsAutoSuggesting(false);
+    isAutoSuggestingRef.current = false;
+    
+    // Stop any ongoing loading
+    setIsLoadingSuggestions(false);
+    
+    // Clear current suggestions but keep the schema (nodes/edges remain)
+    setSuggestionNodes([]);
+    setSuggestionEdges([]);
+    setAiSuggestions(null);
+    setCachedNodes({ option1: null, option2: null });
+    setCachedEdges({ option1: null, option2: null });
+  }, []);
+
+  // Cleanup timeout and abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (autoFetchTimeoutRef.current) {
+        clearTimeout(autoFetchTimeoutRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   return (
     <div className="h-full w-full relative overflow-hidden" style={{ minWidth: 0 }}>
       <style>
@@ -1391,24 +1626,34 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
         Add Table
       </button>
       
-      {/* AI Suggestions Button - One-time fetch */}
-      <button
-        onClick={handleFetchSuggestions}
-        disabled={isLoadingSuggestions || !schema?.entities || schema.entities.length === 0}
-        className="absolute top-20 right-4 z-50 px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isLoadingSuggestions ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Generating...
-          </>
-        ) : (
-          <>
-            <Sparkles className="h-4 w-4" />
-            Get AI Suggestions
-          </>
-        )}
-      </button>
+      {/* AI Suggestions Button - Toggle between Get and Stop Generating */}
+      {isAutoSuggesting ? (
+        <button
+          onClick={handleStopSuggestions}
+          className="absolute top-20 right-4 z-50 px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white"
+        >
+          <Square className="h-4 w-4" />
+          Stop Generating
+        </button>
+      ) : (
+        <button
+          onClick={handleFetchSuggestions}
+          disabled={isLoadingSuggestions || !schema?.entities || schema.entities.length === 0}
+          className="absolute top-20 right-4 z-50 px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoadingSuggestions ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              Get AI Suggestions
+            </>
+          )}
+        </button>
+      )}
       
       {/* Update Schema Button */}
       {onSchemaUpdate && (

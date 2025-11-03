@@ -14,7 +14,7 @@ psycopg2-binary>=2.9.11
 aiosqlite==0.19.0
 
 # Supabase (temporarily disabled to resolve httpx/httpcore conflicts on Python 3.14)
-# supabase==2.0.0
+supabase
 
 # AWS
 boto3==1.29.0
