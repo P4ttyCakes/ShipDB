@@ -442,6 +442,8 @@ class AIAgentService:
         if start != -1 and end != -1 and end > start:
             try:
                 json_text = text[start : end + 1]
+                # Fix unescaped newlines in string values - replace \n with \\n within string literals
+                json_text = self._fix_unescaped_newlines(json_text)
                 obj = json.loads(json_text)
                 if isinstance(obj, dict) and "next_question" in obj:
                     logger.debug("Extracted JSON block parsing succeeded")
@@ -492,6 +494,48 @@ class AIAgentService:
         logger.error(f"Could not parse AI response as valid JSON. Response preview: {text[:500]}")
         logger.error(f"Full response length: {len(text)} characters")
         return None
+    
+    def _fix_unescaped_newlines(self, json_text: str) -> str:
+        """Fix unescaped newlines in JSON string values."""
+        import re
+        # Pattern to match string values: "key": "value with possible \n"
+        # We need to escape actual newline characters within string values
+        def escape_newlines_in_string(match):
+            key_part = match.group(1)  # "key":
+            value = match.group(2)  # the string value
+            # Escape newlines and other problematic control characters
+            escaped_value = value.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+            return f'{key_part} "{escaped_value}"'
+        
+        # Match: "key": "multiline\nvalue"
+        # This is complex because we need to handle escaped quotes
+        result = []
+        in_string = False
+        escape_next = False
+        i = 0
+        while i < len(json_text):
+            char = json_text[i]
+            
+            if escape_next:
+                result.append(char)
+                escape_next = False
+            elif char == '\\':
+                result.append(char)
+                escape_next = True
+            elif char == '"' and not escape_next:
+                in_string = not in_string
+                result.append(char)
+            elif in_string and char == '\n':
+                result.append('\\n')
+            elif in_string and char == '\r':
+                result.append('\\r')
+            elif in_string and char == '\t':
+                result.append('\\t')
+            else:
+                result.append(char)
+            i += 1
+        
+        return ''.join(result)
     
     def _extract_json_with_balance(self, text: str) -> str:
         """Extract JSON by balancing braces and brackets."""

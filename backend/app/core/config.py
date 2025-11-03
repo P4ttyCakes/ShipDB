@@ -54,9 +54,14 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./shipdb.db"
     
+    # Application settings
+    DEBUG: Optional[str] = "false"
+    LOG_LEVEL: Optional[str] = "INFO"
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra fields in .env
 
 
 settings = Settings()
