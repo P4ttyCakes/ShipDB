@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import WaveBackground from "@/components/WaveBackground";
-import SailboatIcon from "@/components/SailboatIcon";
 import { Database, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -84,7 +83,11 @@ const Index = () => {
 
       {/* Sailboat floating on waves */}
       <div className="absolute bottom-[15%] md:bottom-[20%] left-[10%] z-20 animate-float">
-        <SailboatIcon className="w-24 h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 opacity-80 hover:opacity-100 transition-opacity duration-500" />
+        <img 
+          src="/sailboat-icon.png" 
+          alt="Sailboat" 
+          className="w-24 h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 opacity-80 hover:opacity-100 transition-opacity duration-500"
+        />
       </div>
 
       {/* Wave Background - Fixed at bottom */}
