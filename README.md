@@ -11,7 +11,7 @@ Created by Ahaan Shah <ahaansh@umich.edu>, Patrick Lu <Patlu@umich.edu>, and Nic
 ## Tech stack
 
 - Backend: FastAPI (Python), Pydantic, Uvicorn
-- Services: PostgreSQL, DynamoDB, Supabase deployment services
+- Services: PostgreSQL, DynamoDB, AWS, Supabase deployment services
 - Frontend: React 18, TypeScript, Vite, TailwindCSS, shadcn/ui
 
 ## Project structure
