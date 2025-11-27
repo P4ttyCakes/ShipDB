@@ -272,8 +272,18 @@ CREATE TRIGGER {table}_audit_trigger
 def to_dynamodb_defs(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
     tables: List[Dict[str, Any]] = []
     for ent in spec.get("entities", []):
+        # Skip if entity is not a dict or missing name
+        if not isinstance(ent, dict) or not ent.get("name"):
+            logger.warning("DynamoDB: skipping invalid entity (missing name or not a dict)")
+            continue
+            
         # Find primary key fields from the fields array
-        pk_fields = [f for f in ent.get("fields", []) if f.get("primary_key")]
+        fields = ent.get("fields", [])
+        if not isinstance(fields, list):
+            logger.warning("DynamoDB: entity %s has invalid fields; skipping", ent.get("name"))
+            continue
+            
+        pk_fields = [f for f in fields if isinstance(f, dict) and f.get("primary_key")]
         if not pk_fields:
             logger.warning("DynamoDB: entity %s missing primary_key fields; skipping", ent.get("name"))
             continue
@@ -284,20 +294,26 @@ def to_dynamodb_defs(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
         
         # Use the first primary key field as HASH key
         if len(pk_fields) >= 1:
-            pk_name = pk_fields[0]["name"]
+            pk_name = pk_fields[0].get("name")
+            if not pk_name:
+                logger.warning("DynamoDB: entity %s primary key missing name; skipping", ent.get("name"))
+                continue
             key_schema.append({"AttributeName": pk_name, "KeyType": "HASH"})
             attr_set.add(pk_name)
         
         # Use second primary key field as RANGE key (if exists)
         if len(pk_fields) >= 2:
-            pk_name = pk_fields[1]["name"]
-            key_schema.append({"AttributeName": pk_name, "KeyType": "RANGE"})
-            attr_set.add(pk_name)
+            pk_name = pk_fields[1].get("name")
+            if pk_name:
+                key_schema.append({"AttributeName": pk_name, "KeyType": "RANGE"})
+                attr_set.add(pk_name)
         
         # Add all primary key fields to attribute definitions
-        for f in ent.get("fields", []):
+        for f in fields:
+            if not isinstance(f, dict) or not f.get("name"):
+                continue
             if f["name"] in attr_set:
-                t = _normalize_type(f.get("type"))
+                t = _normalize_type(f.get("type", "string"))
                 dynamo_t = "S" if t in ["string", "date", "datetime", "uuid"] else ("N" if t in ["int", "integer", "float", "number"] else "S")
                 attr_defs.append({"AttributeName": f["name"], "AttributeType": dynamo_t})
         provisioned = {
@@ -315,14 +331,18 @@ def to_dynamodb_defs(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
         gsis = []
         
         # First, add GSIs for foreign key fields (automatic)
-        fk_fields = [f for f in ent.get("fields", []) if f.get("foreign_key")]
+        fk_fields = [f for f in fields if isinstance(f, dict) and f.get("foreign_key")]
         for fk_field in fk_fields:
-            fk_name = fk_field["name"]
-            fk_table = fk_field.get("foreign_key", {}).get("table", "")
+            fk_name = fk_field.get("name")
+            if not fk_name:
+                continue
+            fk_table = fk_field.get("foreign_key", {})
+            if isinstance(fk_table, dict):
+                fk_table = fk_table.get("table", "")
             
             # Add foreign key attribute to attribute definitions if not already there
             if fk_name not in [a["AttributeName"] for a in attr_defs]:
-                t = _normalize_type(fk_field.get("type"))
+                t = _normalize_type(fk_field.get("type", "string"))
                 dynamo_t = "S" if t in ["string", "date", "datetime", "uuid"] else ("N" if t in ["int", "integer", "float", "number"] else "S")
                 attr_defs.append({"AttributeName": fk_name, "AttributeType": dynamo_t})
             
@@ -337,20 +357,24 @@ def to_dynamodb_defs(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
         
         # Then add explicit indexes from the spec
         for idx in ent.get("indexes", []) or []:
-            fields = idx.get("fields") or []
-            if not fields:
+            if not isinstance(idx, dict):
+                continue
+            idx_fields = idx.get("fields") or []
+            if not isinstance(idx_fields, list) or not idx_fields:
                 continue
             # Simple single-attr GSI from first field
             gname = idx.get("name") or f"{ent['name']}_gsi_{len(gsis)}"
-            attr = fields[0].get("field")
+            if not isinstance(idx_fields[0], dict):
+                continue
+            attr = idx_fields[0].get("field")
             if not attr:
                 continue
             if attr not in [a["AttributeName"] for a in attr_defs]:
                 # Add attribute def if missing
                 t = "S"
-                for f in ent.get("fields", []):
-                    if f["name"] == attr:
-                        tnorm = _normalize_type(f.get("type"))
+                for f in fields:
+                    if isinstance(f, dict) and f.get("name") == attr:
+                        tnorm = _normalize_type(f.get("type", "string"))
                         t = "S" if tnorm in ["string", "date", "datetime", "uuid"] else ("N" if tnorm in ["int", "integer", "float", "number"] else "S")
                         break
                 attr_defs.append({"AttributeName": attr, "AttributeType": t})
@@ -371,11 +395,27 @@ def generate_all(spec: Dict[str, Any]) -> Dict[str, Any]:
     if not ok:
         raise ValueError("Invalid spec: " + "; ".join(errors))
     
-    result = {
-        "json_schema": to_json_schema(spec),
-        "postgres_sql": to_postgres_sql(spec),
-        "dynamodb_tables": to_dynamodb_defs(spec),
-    }
+    result = {}
+    
+    # Generate each schema format with individual error handling
+    # This way if one fails, the others can still succeed
+    try:
+        result["json_schema"] = to_json_schema(spec)
+    except Exception as e:
+        logger.error(f"Failed to generate JSON schema: {e}")
+        result["json_schema"] = None
+    
+    try:
+        result["postgres_sql"] = to_postgres_sql(spec)
+    except Exception as e:
+        logger.error(f"Failed to generate PostgreSQL SQL: {e}")
+        result["postgres_sql"] = None
+    
+    try:
+        result["dynamodb_tables"] = to_dynamodb_defs(spec)
+    except Exception as e:
+        logger.error(f"Failed to generate DynamoDB tables: {e}")
+        result["dynamodb_tables"] = None
     
     # Add enterprise features if present
     if "hybrid_architecture" in spec:

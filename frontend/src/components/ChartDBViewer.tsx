@@ -132,9 +132,9 @@ export const ChartDBViewer = forwardRef<ChartDBViewerRef, ChartDBViewerProps>(({
         />
       </div>
 
-      <div className="px-2 py-1 border-t text-xs text-muted-foreground bg-muted/50 flex items-center gap-2">
-        <span>💡</span>
-        <span>Drag to move • Edit text • Resize corners • Scroll fields</span>
+      <div className="px-3 py-2 border-t border-border/40 text-xs text-muted-foreground bg-[hsl(var(--card))] flex items-center gap-2">
+        <span className="text-[0.7rem]">💡</span>
+        <span className="text-[0.7rem]">Drag to move • Edit text • Resize corners • Scroll fields</span>
       </div>
     </div>
   );

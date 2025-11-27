@@ -21,228 +21,63 @@ class AIAgentService:
         self._sessions: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
         if Anthropic is None:
-            raise RuntimeError("anthropic SDK not installed")
-        if not getattr(settings, "ANTHROPIC_API_KEY", None):
-            raise RuntimeError("ANTHROPIC_API_KEY not configured")
-        self._client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        self._model_name: str = getattr(settings, "ANTHROPIC_MODEL", "claude-3-haiku-20240307")
+            raise RuntimeError("anthropic SDK not installed. Install it with: pip install anthropic")
+        
+        api_key = getattr(settings, "ANTHROPIC_API_KEY", None)
+        if not api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY not configured. Please set it in your environment variables or .env file.")
+        
+        # Validate API key format (should start with 'sk-' and be reasonably long)
+        if not api_key.startswith('sk-') or len(api_key) < 20:
+            logger.warning(f"ANTHROPIC_API_KEY format looks suspicious (length: {len(api_key)}). Please verify it's correct.")
+        
+        try:
+            self._client = Anthropic(api_key=api_key)
+            self._model_name: str = getattr(settings, "ANTHROPIC_MODEL", "claude-3-haiku-20240307")
+            logger.info(f"Anthropic client initialized with model: {self._model_name}")
+        except Exception as e:
+            logger.error(f"Failed to initialize Anthropic client: {e}")
+            raise RuntimeError(f"Failed to initialize Anthropic client: {e}. Please check your ANTHROPIC_API_KEY.")
 
     def _system_instruction(self) -> str:
         """Return the instruction used to constrain the model to a JSON control response."""
         return (
-            "CRITICAL: You must respond with ONLY valid JSON. Start with { and end with }. No other text. "
-            "You are a senior database architect and domain expert with deep business intelligence. "
-            "When given ANY request to build a database system, you must: "
+            "You are a database architect. Respond with ONLY valid JSON: {\"next_question\": \"...\", \"done\": false, \"partial_spec\": {}}"
             "\n\n"
-            "🔍 DEEP DOMAIN ANALYSIS PROCESS: "
-            "1. ANALYZE THE BUSINESS MODEL: Understand the core business, revenue streams, user types, and value propositions "
-            "2. IDENTIFY STAKEHOLDERS: Who are the users, admins, partners, regulators, and third-party integrations? "
-            "3. MAP USER JOURNEYS: Trace complete user workflows from onboarding to core operations to offboarding "
-            "4. IDENTIFY BUSINESS PROCESSES: What are the key operations, transactions, and business rules? "
-            "5. CONSIDER REGULATORY REQUIREMENTS: What compliance, audit, and legal requirements exist? "
-            "6. ANALYZE DATA RELATIONSHIPS: How do entities connect? What are the cardinalities and dependencies? "
-            "7. IDENTIFY PERFORMANCE PATTERNS: What are the common queries, search patterns, and analytics needs? "
+            "JSON FORMAT (CRITICAL): "
+            "- Start with { and end with }. NO text before or after. "
+            "- NO greetings, explanations, or markdown. Just raw JSON. "
+            "- Required keys: next_question, done, partial_spec"
             "\n\n"
-            "🏗️ COMPREHENSIVE SCHEMA DESIGN: "
-            "- Design for REAL BUSINESS OPERATIONS, not just basic CRUD "
-            "- Include ALL necessary tables for a production system "
-            "- Consider edge cases, error handling, and data integrity "
-            "- Design for scalability, performance, and maintainability "
-            "- Include proper indexes for common query patterns "
-            "- Consider data archival, backup, and recovery needs "
+            "QUESTIONING STRATEGY: "
+            "- Ask 2-4 targeted questions about business operations before completing. "
+            "- For minimal inputs (e.g., 'boba shop'), ask: menu items, ordering process, customer data, inventory, employees. "
+            "- Ask SPECIFIC business questions, NOT confirmations like 'does this look good?' "
+            "- Each question: 1-2 sentences max. One question at a time. "
             "\n\n"
-            "🎯 DOMAIN-SPECIFIC INTELLIGENCE: "
-            "For ANY domain, think deeply about: "
-            "- User management (roles, permissions, authentication, profiles) "
-            "- Core business entities and their lifecycle "
-            "- Transaction processing and financial flows "
-            "- Communication and notification systems "
-            "- Analytics, reporting, and business intelligence "
-            "- Audit trails and compliance tracking "
-            "- Integration points with external systems "
-            "- Performance optimization and caching needs "
-            "- Security, privacy, and data protection "
-            "- Error handling and system monitoring "
+            "COMPLETION CRITERIA (done=true): "
+            "- You understand business operations and workflows "
+            "- You know key entities and relationships "
+            "- You can generate 3-5+ entities with proper fields "
+            "- Typically requires 3-5 user responses (NOT 1-2) "
+            "- When done=true, include COMPLETE entities in partial_spec"
             "\n\n"
-            "QUESTIONING STRATEGY - KEEP IT MINIMAL: "
-            "Your goal is to COMPLETE the conversation as quickly as possible with minimal questions. "
-            "INFER DETAILS based on industry best practices and common patterns. "
-            "\n"
-            "RULES: "
-            "- Ask MAXIMUM 2 follow-up questions after understanding the business "
-            "- Each question should be SHORT (1-2 sentences maximum) "
-            "- NEVER bombard the user with numbered lists of questions "
-            "- NEVER ask 4+ questions at once "
-            "- INFER standard features automatically: "
-            "  * User authentication and profiles for any system "
-            "  * Payment processing for e-commerce "
-            "  * Inventory tracking for product businesses "
-            "  * Scheduling for service businesses "
-            "  * Audit trails for financial systems "
-            "  * Notifications and messaging "
-            "  * Admin and role management "
-            "\n"
-            "Ask ONLY what is absolutely necessary to distinguish between fundamentally different designs. "
-            "For example, if you already know it's 'a soda company', don't ask about: "
-            "- Pricing tiers, discounts, contracts (INFER standard e-commerce pricing) "
-            "- Inventory locations (INFER multi-warehouse support) "
-            "- Order tracking (INFER full order lifecycle) "
-            "- Manufacturing details (INFER batch tracking and quality control) "
-            "\n"
-            "COMPLETE EARLY: After 1-2 user responses describing their business, you should set done=true. "
-            "It's BETTER to generate a complete database with inferred features than to ask more questions."
+            "SCHEMA REQUIREMENTS (when done=true): "
+            "- partial_spec must have: app_type, db_type ('postgresql' or 'dynamodb'), entities array "
+            "- Each entity: name, fields array "
+            "- Each field: name, type, required (boolean), primary_key (if applicable), foreign_key (if applicable) "
+            "- Every entity MUST have an 'id' field with primary_key: true "
+            "- Email fields MUST have unique: true "
+            "- Generate 3-5+ entities, each with 3-5+ fields"
             "\n\n"
-            "NEVER ask technical questions about: "
-            "- Database constraints, indexes, foreign keys "
-            "- Data types, field specifications "
-            "- Database optimization details "
+            "FOREIGN KEYS: "
+            "- Only create FKs for critical business relationships (e.g., orders→order_items, payments→orders) "
+            "- Avoid FKs for optional/denormalizable relationships "
+            "- Max 2-3 foreign keys per table"
             "\n\n"
-            "CRITICAL JSON FORMAT REQUIREMENT: "
-            "You MUST respond with ONLY a valid JSON object. No other text, explanations, or formatting. "
-            "ABSOLUTE REQUIREMENT: Your response must start with the character { and end with }. "
-            "Any text before { or after } will cause the system to fail. "
-            "Do not include any explanatory text, greetings, or phrases. "
-            "The JSON must have exactly these keys: next_question, done, partial_spec "
-            "\n\n"
-            "Example response format: "
-            '{"next_question": "What type of users will use this system?", "done": false, "partial_spec": {}}'
-            "\n\n"
-            "Example COMPLETE response when done=true: "
-            '{"next_question": "Perfect! I have enough information to create your database design.", "done": true, "partial_spec": {"app_type": "E-commerce Platform", "db_type": "postgresql", "entities": [{"name": "products", "fields": [{"name": "id", "type": "uuid", "required": true, "primary_key": true}, {"name": "name", "type": "string", "required": true}, {"name": "price", "type": "decimal", "required": true}, {"name": "inventory_count", "type": "integer", "required": true}, {"name": "created_at", "type": "timestamp", "required": true}]}, {"name": "customers", "fields": [{"name": "id", "type": "uuid", "required": true, "primary_key": true}, {"name": "name", "type": "string", "required": true}, {"name": "email", "type": "string", "required": true, "unique": true}, {"name": "phone", "type": "string", "required": false}, {"name": "created_at", "type": "timestamp", "required": true}]}, {"name": "orders", "fields": [{"name": "id", "type": "uuid", "required": true, "primary_key": true}, {"name": "customer_id", "type": "uuid", "required": true, "foreign_key": {"table": "customers", "field": "id"}}, {"name": "order_date", "type": "timestamp", "required": true}, {"name": "status", "type": "string", "required": true}, {"name": "created_at", "type": "timestamp", "required": true}]}, {"name": "order_items", "fields": [{"name": "id", "type": "uuid", "required": true, "primary_key": true}, {"name": "order_id", "type": "uuid", "required": true, "foreign_key": {"table": "orders", "field": "id"}}, {"name": "product_id", "type": "uuid", "required": true, "foreign_key": {"table": "products", "field": "id"}}, {"name": "quantity", "type": "integer", "required": true}, {"name": "unit_price", "type": "decimal", "required": true}]}, {"name": "payments", "fields": [{"name": "id", "type": "uuid", "required": true, "primary_key": true}, {"name": "order_id", "type": "uuid", "required": true, "foreign_key": {"table": "orders", "field": "id"}}, {"name": "amount", "type": "decimal", "required": true}, {"name": "payment_method", "type": "string", "required": true}, {"name": "status", "type": "string", "required": true}, {"name": "created_at", "type": "timestamp", "required": true}]}]}}'
-            "\n\n"
-            "JSON VALIDATION RULES: "
-            "- Start response with { and end with } "
-            "- Use double quotes for all strings "
-            "- Use true/false for booleans (not True/False) "
-            "- Ensure all brackets and braces are properly closed "
-            "- No trailing commas "
-            "- Escape any quotes inside strings "
-            "\n\n"
-            "When done=true, partial_spec must be a COMPLETE database specification with: "
-            "- app_type: string describing the application "
-            "- db_type: 'postgresql' or 'dynamodb' "
-            "- entities: array of objects with 'name' and 'fields' "
-            "- Each field must have: name, type, required (boolean), and appropriate constraints "
-            "- MANDATORY: Each entity MUST have an 'id' field with primary_key: true "
-            "- MANDATORY: Email fields MUST have unique: true "
-            "- MANDATORY: Foreign key fields MUST have foreign_key: {table: 'entity_name', field: 'id'} "
-            "- Include primary keys, foreign keys, indexes, and relationships "
-            "- CRITICAL: Generate at least 3-5 entities for a complete system "
-            "- CRITICAL: Each entity must have at least 3-5 fields "
-            "\n\n"
-            "SCHEMA UPDATE RULES (when continuing conversations): "
-            "- When user requests changes AFTER you've marked done=true, provide UPDATED entities "
-            "- Include ALL existing entities PLUS any new/modified entities "
-            "- If adding new features (e.g., 'stories' to social media), add new entities "
-            "- If modifying existing entities, include the updated version "
-            "- NEVER provide empty entities array - always include complete schema "
-            "- Example: If user says 'add stories feature', include stories entity + all existing entities "
-            "- Example: If user says 'add admin role to users', update users entity with admin fields "
-            "\n\n"
-            "RELATIONSHIP DESIGN RULES - MINIMIZE FOREIGN KEYS: "
-            "- ONLY create foreign keys when absolutely necessary for data integrity "
-            "- AVOID creating foreign keys for optional or lightweight relationships "
-            "- ONE-TO-MANY relationships: Use foreign keys ONLY when the relationship is core to the business logic "
-            "- EXAMPLE GOOD USAGE: "
-            "  * Orders → order_items (order MUST have items) "
-            "  * Payments → orders (payment MUST reference order) "
-            "- EXAMPLE BAD USAGE (AVOID): "
-            "  * Products → suppliers (just store supplier name as string, not FK) "
-            "  * Users → addresses (just store address fields directly) "
-            "  * Materials → suppliers (not critical to core functionality) "
-            "- MANY-TO-MANY: Create junction tables ONLY when absolutely necessary "
-            "- DO NOT create foreign keys for: "
-            "  * Optional lookups that can be denormalized "
-            "  * Cross-references that don't enforce critical business rules "
-            "  * Relationships that can be inferred from other data "
-            "- EVERY foreign key should enforce a critical business constraint "
-            "- PREFER storing denormalized data over creating unnecessary foreign keys "
-            "- MAXIMUM 2-3 foreign keys per table - if you need more, the design is too normalized "
-            "- NEVER create circular foreign key references "
-            "\n\n"
-            "MANY-TO-MANY RELATIONSHIP DETECTION: "
-            "When you see these patterns, create junction tables: "
-            "- 'orders with multiple products' → order_items table "
-            "- 'users can have multiple roles' → user_roles table "
-            "- 'students enrolled in multiple courses' → enrollments table "
-            "- 'patients can see multiple doctors' → appointments table "
-            "- 'properties favorited by multiple users' → favorites table "
-            "- 'products belong to multiple categories' → product_categories table "
-            "- 'users follow multiple users' → follows table "
-            "- 'posts have multiple tags' → post_tags table "
-            "- 'events have multiple attendees' → event_attendees table "
-            "\n\n"
-            "ENTITY GENERATION REQUIREMENTS: "
-            "When you set done=true, you MUST generate complete entities in the JSON response. "
-            "Do NOT rely on fallback logic. Generate appropriate entities based on the business domain: "
-            "- Healthcare: patients, doctors, appointments, medical_records, prescriptions "
-            "- E-commerce: products, customers, orders, order_items, payments, categories "
-            "- Real Estate: users, properties, favorites, property_views, agents "
-            "- Stock Trading: users, stocks, transactions, portfolios, watchlists "
-            "- Education: students, courses, enrollments, assignments, grades "
-            "- Social: users, posts, comments, likes, follows "
-            "\n\n"
-            "QUESTION STRATEGY - ASK SMART QUESTIONS: "
-            "After the first business description, ask 1-2 targeted questions to clarify the scope. "
-            "If the user gives specific information, INFER obvious details instead of asking about them. "
-            "For example: "
-            "- If they say 'rental properties with filters' → You can INFER: users need to browse/search properties, properties have attributes (price, location, bedrooms), users need authentication. Don't ask if users need accounts - it's obvious. "
-            "- If they say 'e-commerce platform' → You can INFER: products, orders, customers, payments, cart. Don't ask if users need to buy things - it's obvious. "
-            "Only ask questions about things that are genuinely ambiguous or could go multiple ways. "
-            "Don't ask follow-up questions to confirm things you already know or can reasonably infer. "
-            "\n\n"
-            "INTELLIGENT COMPLETION: "
-            "When you have enough information to create a complete database design, set done=true. "
-            "You have enough information when you understand the business domain and can generate "
-            "appropriate entities with proper fields. Don't rush to complete - gather sufficient details first. "
-            "\n\n"
-            "CRITICAL: When done=true, you MUST include complete entities in the partial_spec. "
-            "Do NOT set done=true with empty entities. Generate at least 3-5 entities with "
-            "proper fields for each entity. This is MANDATORY for successful schema generation."
-            "\n\n"
-            "CONVERSATION COMPLETION DETECTION: "
-            "Set done=true when you have enough information to create a complete database design. "
-            "You have enough information when: "
-            "- You understand the business domain and core entities "
-            "- You know the main data fields and relationships needed "
-            "- You have sufficient context to make intelligent database choices "
-            "\n\n"
-            "COMPLETION STRATEGY - BALANCE BETWEEN GATHERING INFO AND NOT OVER-ASKING: "
-            "Gather enough information to build a complete database, but don't ask for obvious details. "
-            "You can complete when you have: "
-            "- Clear understanding of the main business domain and entities "
-            "- Knowledge of key operations users will perform "
-            "- Sufficient detail to generate logical schema with 3-5+ entities "
-            "Complete after 2-4 user responses IF you have clear information. "
-            "Don't force yourself to ask more questions if you can already generate a good schema. "
-            "\n\n"
-            "SMART COMPLETION: "
-            "If the user gives specific, detailed information about their business and needs, "
-            "you can complete after fewer questions. For example: "
-            "- User: 'Rental property search with filters by price, bedrooms, location' "
-            "- You already know enough: users, properties, search/filter functionality "
-            "- Don't ask if they need user accounts, authentication, or properties - it's obvious "
-            "- Complete and generate the schema "
-            "Be confident in your inferences - you don't need to confirm every obvious detail. "
-            "\n\n"
-            "COMPLETION TRIGGERS: "
-            "Set done=true when you see explicit completion signals: "
-            "- 'that covers all', 'that's everything', 'no other requirements' etc. "
-            "OR when you have enough information to generate a complete schema: "
-            "- After 2-4 meaningful exchanges where you understand the domain "
-            "- When the user gives specific details about their business needs "
-            "- When you can confidently infer the main entities and relationships "
-            "TRUST YOUR JUDGMENT: If you understand the business well enough to generate "
-            "a logical database schema with multiple entities, complete the conversation. "
-            "You don't need to confirm every detail - some things are obviously needed. "
-            "\n\n"
-            "When you conclude the conversation, use phrases like: "
-            "- 'Perfect! I have enough information to create your database design.' "
-            "- 'Great! I now have everything I need to design your database.' "
-            "- 'Excellent! Based on what you've told me, I can create your database schema.' "
-            "\n\n"
-            "ALWAYS set done=true when you use completion phrases like the above. "
-            "The system will detect these phrases and automatically finalize the conversation."
+            "EXAMPLES: "
+            "- Question: {\"next_question\": \"What types of menu items do you offer?\", \"done\": false, \"partial_spec\": {}}"
+            "- Complete: {\"next_question\": \"\", \"done\": true, \"partial_spec\": {\"app_type\": \"Boba Shop\", \"db_type\": \"postgresql\", \"entities\": [...]}}"
         )
 
     def _merge_partial(self, base: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
@@ -350,20 +185,48 @@ class AIAgentService:
         """Call Claude with retry/backoff, expecting a control JSON object."""
         max_retries = 3
         base_sleep = 0.5
+        last_error = None
 
         system_txt = self._system_instruction()
         
         for attempt in range(max_retries):
             try:
                 msgs = self._to_anthropic_messages(history, last_user=user_msg)
-                resp = self._client.messages.create(
-                    model=self._model_name,
-                    system=system_txt,
-                    messages=msgs,
-                    max_tokens=4000,
-                    temperature=0.0,
-                    timeout=30.0,
-                )
+                # Increased timeout for more reliability
+                logger.debug(f"Calling Claude API (attempt {attempt + 1}/{max_retries}) with model {self._model_name}")
+                try:
+                    resp = self._client.messages.create(
+                        model=self._model_name,
+                        system=system_txt,
+                        messages=msgs,
+                        max_tokens=4000,
+                        temperature=0.0,
+                        timeout=60.0,  # Increased timeout from 30s to 60s for reliability
+                    )
+                except Exception as api_error:
+                    error_type = type(api_error).__name__
+                    error_msg = str(api_error)
+                    
+                    # Check for Anthropic-specific error types and content policy violations
+                    error_lower = error_msg.lower()
+                    
+                    # Check for content policy violations first (don't retry these)
+                    if any(term in error_lower for term in ["content_policy", "content policy", "policy violation", "moderation", "safety", "blocked", "inappropriate"]):
+                        logger.error(f"Content policy violation detected: {error_msg}")
+                        raise ValueError(f"Your request may violate content policies. Please rephrase your request to describe a legitimate business use case.")
+                    
+                    # Check status codes if available
+                    if hasattr(api_error, 'status_code'):
+                        status_code = api_error.status_code
+                        logger.warning(f"Claude API call failed with HTTP {status_code}: {error_msg}")
+                        
+                        # Content policy violations typically return 400
+                        if status_code == 400 and ("content" in error_lower or "policy" in error_lower):
+                            logger.error(f"Content policy violation (400): {error_msg}")
+                            raise ValueError(f"Your request may violate content policies. Please rephrase your request to describe a legitimate business use case.")
+                    
+                    logger.warning(f"Claude API call raised {error_type}: {error_msg}")
+                    raise  # Re-raise to be caught by outer exception handler
                 
                 # Concatenate text from content blocks
                 text_parts: List[str] = []
@@ -376,124 +239,389 @@ class AIAgentService:
                 # Log the raw response for debugging
                 logger.debug(f"Raw AI response: {text[:500]}...")
                 
-                # Parse JSON from AI response
+                # Parse JSON from AI response (always returns a dict, even if parsing fails)
                 obj = self._parse_json_response(text)
-                if obj is None:
-                    logger.error(f"Failed to parse AI response. Raw text: {text[:1000]}")
-                    raise ValueError(f"AI service returned invalid JSON. Response: {text[:200]}...")
                 
-                if not isinstance(obj, dict):
-                    logger.error(f"AI response is not a dict: {type(obj)} - {obj}")
-                    raise ValueError(f"AI service returned invalid response type: {type(obj)}")
-                
+                # Ensure required fields exist
                 if "next_question" not in obj:
-                    logger.error(f"AI response missing 'next_question' field. Response: {obj}")
-                    raise ValueError("AI service returned response without 'next_question' field")
+                    obj["next_question"] = text.strip() if text else "Please continue..."
+                if "done" not in obj:
+                    obj["done"] = False
+                if "partial_spec" not in obj:
+                    obj["partial_spec"] = {}
                 
                 return obj
                 
             except Exception as e:
                 sleep_s = base_sleep * (2 ** attempt)
-                logger.warning(
-                    "Claude call failed (attempt={}): {}", attempt + 1, str(e)
+                error_type = type(e).__name__
+                error_details = str(e)
+                last_error = f"{error_type}: {error_details}"
+                
+                # Log detailed error information - use error level for final attempt
+                log_level = logger.error if attempt == max_retries - 1 else logger.warning
+                log_level(
+                    "Claude call failed (attempt={}/{}, error_type={}): {}", 
+                    attempt + 1, max_retries, error_type, error_details
                 )
+                
+                # Log full exception traceback for debugging on final attempt
+                if attempt == max_retries - 1:
+                    logger.error(f"Full exception traceback for final failure:", exc_info=True)
+                
+                # Check for specific error types that shouldn't be retried
+                error_lower = error_details.lower()
+                
+                # Content policy violations - don't retry
+                if any(term in error_lower for term in ["content_policy", "content policy", "policy violation", "moderation", "safety", "blocked"]):
+                    logger.error(f"Content policy violation detected: {error_details}")
+                    raise ValueError(f"Your request may violate content policies. Please rephrase your request to describe a legitimate business use case.")
+                
+                # Authentication errors - don't retry
+                if any(term in error_lower for term in ["authentication", "api_key", "401", "unauthorized", "invalid api key"]):
+                    logger.error(f"Authentication error detected - check ANTHROPIC_API_KEY: {error_details}")
+                    raise ValueError(f"Invalid API credentials: {error_details}. Please check your ANTHROPIC_API_KEY environment variable.")
+                
+                # Rate limit errors - don't retry immediately
+                if any(term in error_lower for term in ["rate_limit", "429", "rate limit", "too many requests"]):
+                    logger.error(f"Rate limit exceeded: {error_details}")
+                    raise RuntimeError(f"Rate limit exceeded. Please wait a moment and try again: {error_details}")
+                
+                # Check for Anthropic APIError specific attributes
+                if hasattr(e, 'response') and hasattr(e.response, 'status_code'):
+                    status = e.response.status_code
+                    if status == 400:
+                        logger.warning(f"Bad request (400) - may be content policy violation: {error_details}")
+                        if "content" in error_lower or "policy" in error_lower:
+                            raise ValueError(f"Request may violate content policies. Please rephrase your request appropriately.")
+                
+                # Network/timeout errors - these are retryable
+                if any(term in error_lower for term in ["timeout", "connection", "network", "socket"]):
+                    logger.warning(f"Network/timeout error (will retry): {error_details}")
+                
                 if attempt < max_retries - 1:
+                    logger.info(f"Retrying in {sleep_s}s...")
                     time.sleep(sleep_s)
                     continue
 
-        # All retries failed
-        logger.error("All Claude retries failed")
-        raise RuntimeError("AI service unavailable after multiple retries. Please try again later.")
+        # All retries failed - provide more context with actionable message
+        error_msg = last_error or "Unknown error"
+        logger.error(f"All Claude retries failed after {max_retries} attempts. Last error: {error_msg}")
+        logger.error(f"Full error context: {last_error}")
+        
+        # Create a user-friendly error message based on error type
+        error_lower = error_msg.lower()
+        if any(term in error_lower for term in ["timeout", "timed out", "connection", "network"]):
+            user_msg = f"Connection timeout after {max_retries} retries. The AI service took too long to respond. Please check your internet connection and try again in a moment."
+        elif any(term in error_lower for term in ["api", "key", "credential", "authentication", "unauthorized"]):
+            user_msg = f"API configuration error: {error_msg}. Please verify your ANTHROPIC_API_KEY environment variable is set correctly and valid."
+        elif "rate limit" in error_lower or "429" in error_lower:
+            user_msg = f"Rate limit exceeded: {error_msg}. Please wait a few moments before trying again."
+        else:
+            user_msg = f"AI service unavailable after {max_retries} retries. Error: {error_msg}. Please check your ANTHROPIC_API_KEY configuration and network connection, then try again."
+        
+        raise RuntimeError(user_msg)
     
-    def _parse_json_response(self, text: str) -> Optional[Dict[str, Any]]:
-        """Parse JSON from AI response with robust error handling."""
+    def _parse_json_response(self, text: str) -> Dict[str, Any]:
+        """
+        Parse JSON from AI response with robust extraction and error handling.
+        This method handles cases where the AI returns explanatory text along with JSON.
+        Always returns a valid dict structure, never raises exceptions.
+        """
         if not text or not text.strip():
-            logger.error("Empty text provided to JSON parser")
-            return None
+            logger.warning("Empty text provided to JSON parser, using default response")
+            return {
+                "next_question": "Please continue...",
+                "partial_spec": {},
+                "done": False
+            }
         
         import re
         
-        # Strategy 1: Try direct JSON parsing
+        # Clean the text first - remove any leading/trailing whitespace
+        text = text.strip()
+        
+        # Strategy 1: Try direct JSON parsing (fastest path)
         try:
-            obj = json.loads(text.strip())
-            if isinstance(obj, dict) and "next_question" in obj:
-                logger.debug("Direct JSON parsing succeeded")
-                return obj
+            obj = json.loads(text)
+            if isinstance(obj, dict):
+                # Validate it has the expected structure
+                if "next_question" in obj or "partial_spec" in obj or "done" in obj:
+                    logger.debug("Successfully parsed JSON via direct parsing")
+                    return self._ensure_required_fields(obj)
         except json.JSONDecodeError as e:
             logger.debug(f"Direct JSON parsing failed: {e}")
         
-        # Strategy 2: Remove markdown code blocks if present
-        cleaned_text = text
-        # Remove ```json ... ``` blocks
-        cleaned_text = re.sub(r'```json\s*\n?', '', cleaned_text)
-        cleaned_text = re.sub(r'```\s*\n?', '', cleaned_text)
-        
-        try:
-            obj = json.loads(cleaned_text.strip())
-            if isinstance(obj, dict) and "next_question" in obj:
-                logger.debug("JSON parsing after markdown removal succeeded")
-                return obj
-        except json.JSONDecodeError as e:
-            logger.debug(f"JSON parsing after markdown removal failed: {e}")
-        
-        # Strategy 3: Extract JSON block (content between first { and last })
-        start = text.find("{")
-        end = text.rfind("}")
-        if start != -1 and end != -1 and end > start:
+        # Strategy 2: Extract JSON from markdown code blocks (```json ... ```)
+        json_match = re.search(r'```(?:json)?\s*\n(.*?)\n```', text, re.DOTALL | re.IGNORECASE)
+        if json_match:
             try:
-                json_text = text[start : end + 1]
-                # Fix unescaped newlines in string values - replace \n with \\n within string literals
-                json_text = self._fix_unescaped_newlines(json_text)
-                obj = json.loads(json_text)
-                if isinstance(obj, dict) and "next_question" in obj:
-                    logger.debug("Extracted JSON block parsing succeeded")
-                    return obj
+                json_content = json_match.group(1).strip()
+                obj = json.loads(json_content)
+                if isinstance(obj, dict):
+                    logger.debug("Successfully parsed JSON from markdown code block")
+                    return self._ensure_required_fields(obj)
             except json.JSONDecodeError as e:
-                logger.debug(f"Extracted JSON block parsing failed: {e}")
+                logger.debug(f"Markdown code block JSON parsing failed: {e}")
         
-        # Strategy 4: Try line by line to find JSON object
-        lines = text.split('\n')
-        json_lines = []
-        in_json = False
-        brace_count = 0
-        
-        for line in lines:
-            stripped = line.strip()
-            if '{' in stripped and not in_json:
-                in_json = True
-                json_lines.append(line)
-                brace_count += stripped.count('{') - stripped.count('}')
-            elif in_json:
-                json_lines.append(line)
-                brace_count += stripped.count('{') - stripped.count('}')
-                if brace_count == 0:
-                    break
-        
-        if json_lines:
+        # Strategy 3: Find all JSON objects in the text and try to parse the largest one
+        # This handles cases where there's text before/after JSON
+        json_candidates = self._find_all_json_objects(text)
+        for candidate_json in json_candidates:
             try:
-                json_text = '\n'.join(json_lines)
-                obj = json.loads(json_text)
-                if isinstance(obj, dict) and "next_question" in obj:
-                    logger.debug("Line-by-line JSON extraction succeeded")
-                    return obj
+                # Try to fix common JSON issues before parsing
+                fixed_json = self._fix_common_json_issues(candidate_json)
+                obj = json.loads(fixed_json)
+                if isinstance(obj, dict):
+                    # Prefer objects that have our expected structure
+                    if "next_question" in obj or "partial_spec" in obj or "done" in obj:
+                        logger.debug("Successfully parsed JSON from extracted object")
+                        return self._ensure_required_fields(obj)
+                    # If no expected structure but it's a valid dict, use it as partial_spec
+                    elif len(obj) > 0:
+                        logger.debug("Found valid JSON object, using as partial_spec")
+                        return {
+                            "next_question": "Please continue...",
+                            "partial_spec": obj,
+                            "done": False
+                        }
             except json.JSONDecodeError as e:
-                logger.debug(f"Line-by-line JSON extraction failed: {e}")
+                logger.debug(f"JSON candidate parsing failed: {e}")
+                continue
         
-        # Strategy 5: Try with character-level balancing
-        result = self._extract_json_with_balance(text)
-        if result:
+        # Strategy 4: Try to extract partial_spec from text even if outer structure is missing
+        # Look for entities, app_type, db_type patterns
+        partial_spec = self._extract_partial_spec_from_text(text)
+        if partial_spec:
+            logger.info("Extracted partial_spec from text, wrapping in response structure")
+            return {
+                "next_question": self._extract_question_from_text(text) or "Please continue...",
+                "partial_spec": partial_spec,
+                "done": self._detect_completion_from_text(text)
+            }
+        
+        # Strategy 5: Final fallback - wrap the entire text as next_question
+        # This ensures we never fail completely, but log a warning
+        logger.warning(
+            f"AI returned plain text instead of JSON. Text preview: {text[:300]}... "
+            f"Wrapping text in JSON structure."
+        )
+        return {
+            "next_question": text.strip(),
+            "partial_spec": {},
+            "done": False
+        }
+    
+    def _ensure_required_fields(self, obj: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure the response dict has all required fields with defaults."""
+        result = dict(obj)  # Make a copy
+        if "next_question" not in result:
+            result["next_question"] = ""
+        if "done" not in result:
+            result["done"] = False
+        if "partial_spec" not in result:
+            result["partial_spec"] = {}
+        return result
+    
+    def _find_all_json_objects(self, text: str) -> List[str]:
+        """
+        Find all potential JSON objects in text by balancing braces.
+        Returns candidates sorted by size (largest first).
+        """
+        candidates = []
+        start = 0
+        
+        while True:
+            # Find next opening brace
+            start = text.find('{', start)
+            if start == -1:
+                break
+            
+            # Extract balanced JSON from this position
+            balanced_json = self._extract_json_with_balance(text[start:])
+            if balanced_json:
+                candidates.append(balanced_json)
+                # Move past this JSON object
+                start += len(balanced_json)
+            else:
+                start += 1
+        
+        # Sort by length (descending) to try largest objects first
+        candidates.sort(key=len, reverse=True)
+        return candidates
+    
+    def _fix_common_json_issues(self, json_text: str) -> str:
+        """
+        Fix common JSON issues that might prevent parsing:
+        - Unescaped newlines in strings
+        - Unescaped quotes in strings
+        - Trailing commas
+        - Comments (though JSON doesn't support them)
+        """
+        import re
+        
+        # Fix unescaped newlines, carriage returns, and tabs in string values
+        fixed = self._fix_unescaped_newlines(json_text)
+        
+        # Remove trailing commas before } or ]
+        fixed = re.sub(r',(\s*[}\]])', r'\1', fixed)
+        
+        # Try to fix common quote issues in string values
+        # This is tricky - we need to be careful not to break valid JSON
+        # For now, we'll be conservative and only fix obvious issues
+        
+        return fixed
+    
+    def _extract_partial_spec_from_text(self, text: str) -> Optional[Dict[str, Any]]:
+        """
+        Try to extract a partial_spec structure from text even if it's not in proper JSON format.
+        Looks for patterns like "entities", "app_type", "db_type" etc.
+        """
+        import re
+        
+        # Look for JSON-like structures that might contain entities or app_type
+        # Try to find the largest JSON object that contains these keywords
+        entities_pos = text.rfind('"entities"')
+        app_type_pos = text.rfind('"app_type"')
+        db_type_pos = text.rfind('"db_type"')
+        
+        if entities_pos == -1 and app_type_pos == -1 and db_type_pos == -1:
+            return None
+        
+        # Find the start of a JSON object near these keywords
+        search_positions = [pos for pos in [entities_pos, app_type_pos, db_type_pos] if pos != -1]
+        if not search_positions:
+            return None
+        
+        # Start from the earliest position and work backwards to find opening brace
+        start_pos = min(search_positions)
+        while start_pos > 0 and text[start_pos] != '{':
+            start_pos -= 1
+        
+        if start_pos == -1 or text[start_pos] != '{':
+            return None
+        
+        # Extract balanced JSON from this position
+        balanced_json = self._extract_json_with_balance(text[start_pos:])
+        if balanced_json:
             try:
-                obj = json.loads(result)
-                if isinstance(obj, dict) and "next_question" in obj:
-                    logger.debug("Character-level balanced JSON extraction succeeded")
+                fixed_json = self._fix_common_json_issues(balanced_json)
+                obj = json.loads(fixed_json)
+                if isinstance(obj, dict) and ("entities" in obj or "app_type" in obj or "db_type" in obj):
+                    logger.info("Extracted partial_spec from text")
                     return obj
-            except json.JSONDecodeError as e:
-                logger.debug(f"Character-level balanced JSON parsing failed: {e}")
+            except json.JSONDecodeError:
+                pass
         
-        # All strategies failed - log the actual error
-        logger.error(f"Could not parse AI response as valid JSON. Response preview: {text[:500]}")
-        logger.error(f"Full response length: {len(text)} characters")
         return None
+    
+    def _extract_question_from_text(self, text: str) -> Optional[str]:
+        """
+        Try to extract a question from text that might be before or after JSON.
+        Looks for patterns like "What...", "Please...", etc.
+        """
+        import re
+        
+        # Remove any JSON-like structures first
+        text_without_json = re.sub(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', '', text)
+        
+        # Look for question-like patterns
+        question_patterns = [
+            r'(?:What|How|Which|When|Where|Why|Can|Could|Would|Should|Do|Does|Is|Are)\s+[^.!?]*[?]',
+            r'Please\s+[^.!?]*[?]',
+            r'[^.!?]*\?',
+        ]
+        
+        for pattern in question_patterns:
+            match = re.search(pattern, text_without_json, re.IGNORECASE)
+            if match:
+                question = match.group(0).strip()
+                if len(question) > 10:  # Filter out very short matches
+                    return question
+        
+        return None
+    
+    def _detect_completion_from_text(self, text: str) -> bool:
+        """
+        Detect if the text indicates the conversation is complete.
+        Looks for completion phrases.
+        """
+        completion_phrases = [
+            "done",
+            "complete",
+            "finished",
+            "ready to",
+            "have enough information",
+            "can create",
+            "will generate",
+        ]
+        
+        text_lower = text.lower()
+        return any(phrase in text_lower for phrase in completion_phrases)
+    
+    def _fix_embedded_json_in_strings(self, json_text: str) -> str:
+        """Fix embedded JSON objects/arrays in JSON string values by escaping quotes and braces."""
+        import re
+        
+        # Strategy: Find string values and escape any unescaped quotes, braces, and newlines inside them
+        result = []
+        i = 0
+        in_string = False
+        escape_next = False
+        
+        while i < len(json_text):
+            char = json_text[i]
+            
+            if escape_next:
+                result.append(char)
+                escape_next = False
+                i += 1
+                continue
+            
+            if char == '\\':
+                result.append(char)
+                escape_next = True
+                i += 1
+                continue
+            
+            if char == '"' and not escape_next:
+                # Check if this is the start/end of a string value (not a key)
+                # Look backwards to see if we're after a : (value) or , (key)
+                if in_string:
+                    # Ending a string - check if next char is , or } or ]
+                    in_string = False
+                    result.append(char)
+                else:
+                    # Starting a string - check if previous context suggests it's a value
+                    # Simple heuristic: if we see : before this quote, it's likely a value
+                    in_string = True
+                    result.append(char)
+                i += 1
+                continue
+            
+            if in_string:
+                # Inside a string value - escape problematic characters
+                if char == '\n':
+                    result.append('\\n')
+                elif char == '\r':
+                    result.append('\\r')
+                elif char == '\t':
+                    result.append('\\t')
+                elif char == '"':
+                    # Unescaped quote inside string - escape it
+                    result.append('\\"')
+                elif char == '\\':
+                    # Already handled above, but just in case
+                    result.append(char)
+                    escape_next = True
+                else:
+                    result.append(char)
+            else:
+                result.append(char)
+            
+            i += 1
+        
+        return ''.join(result)
     
     def _fix_unescaped_newlines(self, json_text: str) -> str:
         """Fix unescaped newlines in JSON string values."""
@@ -559,8 +687,88 @@ class AIAgentService:
             return text[start:end + 1]
         return ""
 
+    def _extract_spec_from_text(self, text: str) -> Optional[Dict[str, Any]]:
+        """Extract spec JSON from text even if outer JSON is malformed."""
+        import re
+        
+        # Try to find a spec-like JSON structure (has "entities" or "app_type")
+        # Look for the largest JSON object that contains "entities" or "app_type"
+        # Start from the end and work backwards to find the complete spec
+        entities_pos = text.rfind('"entities"')
+        app_type_pos = text.rfind('"app_type"')
+        
+        if entities_pos == -1 and app_type_pos == -1:
+            return None
+        
+        # Find the start of the JSON object containing entities/app_type
+        start_pos = max(entities_pos, app_type_pos)
+        # Go backwards to find the opening brace
+        while start_pos > 0 and text[start_pos] != '{':
+            start_pos -= 1
+        
+        if start_pos == -1:
+            return None
+        
+        # Extract balanced JSON from this position
+        balanced_json = self._extract_json_with_balance(text[start_pos:])
+        if balanced_json:
+            try:
+                obj = json.loads(balanced_json)
+                if isinstance(obj, dict) and ("entities" in obj or "app_type" in obj):
+                    logger.info("Extracted spec from malformed JSON response")
+                    return obj
+            except json.JSONDecodeError:
+                pass
+        
+        return None
+    
+    def _parse_suggestions_json(self, text: str) -> Dict[str, Any]:
+        """
+        Parse JSON for schema suggestions with robust extraction.
+        Similar to _parse_json_response but expects a different structure.
+        """
+        if not text or not text.strip():
+            raise ValueError("Empty response from AI")
+        
+        import re
+        
+        text = text.strip()
+        
+        # Strategy 1: Try direct JSON parsing
+        try:
+            obj = json.loads(text)
+            if isinstance(obj, dict) and ("option_1" in obj or "option_2" in obj):
+                return obj
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 2: Extract JSON from markdown code blocks
+        json_match = re.search(r'```(?:json)?\s*\n(.*?)\n```', text, re.DOTALL | re.IGNORECASE)
+        if json_match:
+            try:
+                json_content = json_match.group(1).strip()
+                obj = json.loads(json_content)
+                if isinstance(obj, dict) and ("option_1" in obj or "option_2" in obj):
+                    return obj
+            except json.JSONDecodeError:
+                pass
+        
+        # Strategy 3: Extract JSON by finding first { and balancing braces
+        balanced_json = self._extract_json_with_balance(text)
+        if balanced_json:
+            try:
+                fixed_json = self._fix_common_json_issues(balanced_json)
+                obj = json.loads(fixed_json)
+                if isinstance(obj, dict) and ("option_1" in obj or "option_2" in obj):
+                    return obj
+            except json.JSONDecodeError:
+                pass
+        
+        # If all parsing fails, raise an error (unlike _parse_json_response which has fallback)
+        raise ValueError(f"AI service returned invalid JSON. Response: {text[:500]}...")
+    
     def _extract_json(self, text: str) -> str:
-        """Extract JSON from text, handling markdown code blocks."""
+        """Extract JSON from text, handling markdown code blocks. DEPRECATED: Use _parse_json_response or _parse_suggestions_json instead."""
         if not text:
             return ""
         
@@ -613,6 +821,7 @@ class AIAgentService:
         
         text_lower = text.lower()
         return any(phrase in text_lower for phrase in completion_phrases)
+    
 
     def next_turn(self, session_id: str, answer: str) -> Dict[str, Any]:
         """Advance the conversation with the user's answer and return the next question and merged spec."""
@@ -630,12 +839,7 @@ class AIAgentService:
         merged = self._merge_partial(dict(state.get("partial_spec") or {}), partial)
         done = bool(control.get("done", False))
         
-        # Check if AI is using completion phrases
-        next_question = control.get("next_question", "")
-        if self._detect_completion_phrases(next_question):
-            logger.info("Detected completion phrase in AI response, marking conversation as done")
-            control["done"] = True
-            done = True
+        # No confirmation step needed - AI can go straight to done=true when it has enough info
         
         # If AI says it's done but doesn't have complete entities, let the AI handle it
         # Don't fall back to hard-coded entities - let the AI generate appropriate ones
@@ -744,13 +948,13 @@ CRITICAL: Respond with ONLY valid JSON. No other text before or after."""
             )
             
             response_text = message.content[0].text if message.content else ""
-            response_text = self._extract_json(response_text)
             
-            # Parse JSON response
-            suggestions = json.loads(response_text)
+            # Use robust JSON parsing (similar to _parse_json_response but for suggestions format)
+            suggestions = self._parse_suggestions_json(response_text)
             
             # Ensure we have both options
-            if "option_1" not in suggestions or "option_2" not in suggestions:
+            if not isinstance(suggestions, dict) or "option_1" not in suggestions or "option_2" not in suggestions:
+                logger.warning("AI did not return both option_1 and option_2 in suggestions")
                 raise ValueError("AI did not return both option_1 and option_2")
             
             return suggestions

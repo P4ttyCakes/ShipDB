@@ -61,16 +61,16 @@ interface TableNodeData {
   isSuggestion?: boolean;
 }
 
-// Color palette for tables sharing common entities - VIBRANT BORDER COLORS
+// Color palette for tables - More vibrant for better visibility
 const colorPalette = [
-  { bg: 'hsl(var(--card))', border: 'hsl(195 75% 50%)', text: 'hsl(var(--foreground))' }, // Blue
-  { bg: 'hsl(var(--card))', border: 'hsl(142 70% 50%)', text: 'hsl(var(--foreground))' }, // Green
-  { bg: 'hsl(var(--card))', border: 'hsl(338 70% 60%)', text: 'hsl(var(--foreground))' }, // Pink
-  { bg: 'hsl(var(--card))', border: 'hsl(262 70% 60%)', text: 'hsl(var(--foreground))' }, // Purple
-  { bg: 'hsl(var(--card))', border: 'hsl(346 70% 60%)', text: 'hsl(var(--foreground))' }, // Rose
-  { bg: 'hsl(var(--card))', border: 'hsl(221 70% 60%)', text: 'hsl(var(--foreground))' }, // Indigo
-  { bg: 'hsl(var(--card))', border: 'hsl(152 70% 50%)', text: 'hsl(var(--foreground))' }, // Emerald
-  { bg: 'hsl(var(--card))', border: 'hsl(261 70% 60%)', text: 'hsl(var(--foreground))' }, // Violet
+  { bg: 'hsl(var(--card))', border: 'hsl(217 91% 55%)', text: 'hsl(var(--foreground))' }, // Blue (primary)
+  { bg: 'hsl(var(--card))', border: 'hsl(142 71% 45%)', text: 'hsl(var(--foreground))' }, // Green
+  { bg: 'hsl(var(--card))', border: 'hsl(262 70% 55%)', text: 'hsl(var(--foreground))' }, // Purple
+  { bg: 'hsl(var(--card))', border: 'hsl(221 83% 58%)', text: 'hsl(var(--foreground))' }, // Indigo
+  { bg: 'hsl(var(--card))', border: 'hsl(152 65% 48%)', text: 'hsl(var(--foreground))' }, // Emerald
+  { bg: 'hsl(var(--card))', border: 'hsl(280 75% 62%)', text: 'hsl(var(--foreground))' }, // Violet
+  { bg: 'hsl(var(--card))', border: 'hsl(195 80% 50%)', text: 'hsl(var(--foreground))' }, // Cyan
+  { bg: 'hsl(var(--card))', border: 'hsl(340 75% 58%)', text: 'hsl(var(--foreground))' }, // Rose
 ];
 
 const TableNode = (props: NodeProps) => {
@@ -97,7 +97,7 @@ const TableNode = (props: NodeProps) => {
     
     // Auto-resize based on field count
     const fieldCount = updatedFields.length;
-    const dynamicHeight = Math.max(200, 120 + fieldCount * 32);
+    const dynamicHeight = Math.max(250, 140 + fieldCount * 40);
     
     if (data?.onSizeChange) {
       data.onSizeChange(props.id as string, width, dynamicHeight);
@@ -115,7 +115,7 @@ const TableNode = (props: NodeProps) => {
     
     // Auto-resize based on field count
     const fieldCount = updatedFields.length;
-    const dynamicHeight = Math.max(200, 120 + fieldCount * 32);
+    const dynamicHeight = Math.max(250, 140 + fieldCount * 40);
     
     if (data?.onSizeChange) {
       data.onSizeChange(props.id as string, width, dynamicHeight);
@@ -147,17 +147,17 @@ const TableNode = (props: NodeProps) => {
 
   return (
     <div 
-      className="rounded-lg shadow-xl relative overflow-hidden"
+      className="rounded-md shadow-sm relative overflow-hidden border-2"
       style={{ 
         backgroundColor: bgColor,
-        border: `3px solid ${borderColor}`,
+        borderColor: borderColor,
         width: width,
         height: height,
-        minWidth: 250,
-        minHeight: 200,
+        minWidth: 280,
+        minHeight: 250,
       }}
     >
-      {/* Reject Button - Top Right - Only for suggestions */}
+      {/* Reject Button - Top Right - Only for suggestions - Cursor IDE style */}
       {isSuggestion && data?.onReject && (
         <button
           onClick={(e) => {
@@ -166,17 +166,17 @@ const TableNode = (props: NodeProps) => {
               data.onReject(props.id as string);
             }
           }}
-          className="absolute top-2 right-2 z-50 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition-colors flex items-center justify-center"
-          style={{ width: '24px', height: '24px' }}
+          className="absolute top-2 right-2 z-50 bg-[hsl(var(--background))] border border-border/40 hover:bg-[hsl(var(--destructive))]/20 text-foreground rounded-md p-1.5 transition-colors flex items-center justify-center"
+          style={{ width: '22px', height: '22px' }}
         >
           <X className="h-3 w-3" />
         </button>
       )}
       
-      {/* Custom Resize Handle - Bottom Right - Hidden for suggestions */}
+      {/* Custom Resize Handle - Bottom Right - Hidden for suggestions - Cursor IDE style */}
       {!isSuggestion && (
       <div
-        className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-50 bg-blue-500 border-2 border-white rounded-tl-lg hover:bg-blue-600 transition-colors"
+        className="absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize z-50 bg-border/60 hover:bg-[hsl(var(--primary))] transition-colors"
         style={{
           clipPath: 'polygon(100% 0, 100% 100%, 0 100%)',
         }}
@@ -218,41 +218,37 @@ const TableNode = (props: NodeProps) => {
         type="source" 
         position={Position.Right} 
         id="right"
-        style={{ width: '12px', height: '12px', right: '-6px', backgroundColor: borderColor, border: '2px solid white' }}
+        className="!w-2.5 !h-2.5 !right-[-5px] !bg-border hover:!bg-[hsl(var(--primary))] !border-2 hover:scale-110 transition-all"
+        style={{ borderColor: bgColor }}
       />
       <Handle 
         type="target" 
         position={Position.Left} 
         id="left"
-        style={{ width: '12px', height: '12px', left: '-6px', backgroundColor: borderColor, border: '2px solid white' }}
+        className="!w-2.5 !h-2.5 !left-[-5px] !bg-border hover:!bg-[hsl(var(--primary))] !border-2 hover:scale-110 transition-all"
+        style={{ borderColor: bgColor }}
       />
       <Handle 
         type="source" 
         position={Position.Bottom} 
         id="bottom"
-        style={{ width: '12px', height: '12px', bottom: '-6px', backgroundColor: borderColor, border: '2px solid white' }}
+        className="!w-2.5 !h-2.5 !bottom-[-5px] !bg-border hover:!bg-[hsl(var(--primary))] !border-2 hover:scale-110 transition-all"
+        style={{ borderColor: bgColor }}
       />
       <Handle 
         type="target" 
         position={Position.Top} 
         id="top"
-        style={{ width: '12px', height: '12px', top: '-6px', backgroundColor: borderColor, border: '2px solid white' }}
+        className="!w-2.5 !h-2.5 !top-[-5px] !bg-border hover:!bg-[hsl(var(--primary))] !border-2 hover:scale-110 transition-all"
+        style={{ borderColor: bgColor }}
       />
       
-      {/* Colored Header Bar - Thick and Visible */}
+      {/* Table Header - Cursor IDE style */}
       <div 
-        className="h-2 w-full"
+        className="px-4 py-3 border-b" 
         style={{ 
-          backgroundColor: borderColor,
-        }}
-      />
-      
-      {/* Table Header */}
-      <div 
-        className="p-3 border-b-2 shadow-sm" 
-        style={{ 
-          borderColor: `${borderColor}80`,
           backgroundColor: bgColor,
+          borderColor: `${borderColor}40`,
         }}
       >
         <div className="flex items-center justify-between gap-2">
@@ -264,13 +260,13 @@ const TableNode = (props: NodeProps) => {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') setIsEditingTableName(false);
               }}
-              className="text-sm font-bold flex-1"
+              className="text-base font-semibold flex-1 bg-[hsl(var(--background))] border-border/40 h-8"
               placeholder="Table name"
               autoFocus
             />
           ) : (
             <h3 
-              className="font-bold text-lg capitalize truncate flex-1 cursor-pointer hover:opacity-80 transition-opacity"
+              className="font-semibold text-base capitalize truncate flex-1 cursor-pointer hover:text-[hsl(var(--primary))] transition-colors"
               onClick={() => setIsEditingTableName(true)}
               style={{ color: textColor }}
             >
@@ -282,16 +278,16 @@ const TableNode = (props: NodeProps) => {
       </div>
       
       {/* Fields - Always Scrollable */}
-      <div className="p-2 pb-1 space-y-1 h-[calc(100%-6.5rem)] overflow-y-auto overscroll-contain">
+      <div className="p-3 pb-2 space-y-1.5 h-[calc(100%-7rem)] overflow-y-auto overscroll-contain bg-[hsl(var(--background))]/20">
             {fields.map((field: any, idx: number) => (
           <div key={idx}>
             <div 
-              className={`flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-black/5 transition-colors ${
-                editingField === idx || editingType === idx ? 'bg-primary/10' : ''
+              className={`group flex items-center gap-2 text-sm py-2 px-3 rounded hover:bg-[hsl(var(--muted))]/30 transition-colors ${
+                editingField === idx || editingType === idx ? 'bg-[hsl(var(--primary))]/10' : ''
               }`}
             >
             {editingField === idx ? (
-                <Input
+              <Input
                 value={field.name || ''}
                 onChange={(e) => {
                   const newName = e.target.value;
@@ -302,9 +298,6 @@ const TableNode = (props: NodeProps) => {
                     setNameError(null);
                   }
                 }}
-                placeholder="Field name (required)"
-                className={`flex-1 h-7 text-xs ${nameError ? 'border-red-500' : ''}`}
-                autoFocus
                 onBlur={() => {
                   if (!field.name || !field.name.trim()) {
                     setNameError('Please enter a field name');
@@ -326,51 +319,46 @@ const TableNode = (props: NodeProps) => {
                     setEditingField(null);
                   }
                 }}
+                className="flex-1 text-sm bg-[hsl(var(--background))] border-border/40 h-7 px-2"
+                placeholder="Field name"
+                autoFocus
               />
             ) : (
               <span 
-                className={`font-mono flex-1 cursor-pointer hover:opacity-80 transition-opacity ${field.primaryKey ? 'font-bold' : ''}`}
+                className={`font-mono flex-1 cursor-pointer hover:text-[hsl(var(--primary))] transition-colors text-sm ${field.primaryKey ? 'font-semibold text-[hsl(var(--primary))]' : 'font-normal'}`}
                 onClick={() => setEditingField(idx)}
-                style={{ color: field.primaryKey ? 'hsl(var(--primary))' : 'hsl(var(--foreground))' }}
               >
-                {field.name || <span className="text-red-500 italic">(no name)</span>}
+                {field.name || <span className="text-[hsl(var(--destructive))] italic">(no name)</span>}
               </span>
             )}
             
             {editingType === idx ? (
-                <Input
+              <Input
                 value={field.type || ''}
-                  onChange={(e) => handleUpdateField(idx, { type: e.target.value })}
-                placeholder="Type (required)"
-                className={`w-24 h-7 text-xs ${!field.type || !field.type.trim() ? 'border-red-500' : ''}`}
+                onChange={(e) => handleUpdateField(idx, { type: e.target.value })}
+                placeholder="Type"
+                className="w-28 text-sm bg-[hsl(var(--background))] border-border/40 h-7 px-2"
                 autoFocus
                 onBlur={() => {
                   if (!field.type || !field.type.trim()) {
                     handleUpdateField(idx, { type: 'text' });
-                    setNameError('Type is required');
-                  } else {
-                    setNameError(null);
-                    setEditingType(null);
                   }
+                  setEditingType(null);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     if (!field.type || !field.type.trim()) {
                       handleUpdateField(idx, { type: 'text' });
-                      setNameError('Type is required');
-                    } else {
-                      setNameError(null);
-                      setEditingType(null);
                     }
+                    setEditingType(null);
                   } else if (e.key === 'Escape') {
-                    setNameError(null);
                     setEditingType(null);
                   }
                 }}
               />
             ) : (
               <span 
-                className="text-xs bg-muted px-2 py-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity" 
+                className="text-sm bg-[hsl(var(--muted))] px-2.5 py-1 rounded cursor-pointer hover:bg-[hsl(var(--muted))]/80 transition-colors font-mono" 
                 style={{ color: 'hsl(var(--muted-foreground))' }}
                 onClick={() => setEditingType(idx)}
               >
@@ -381,27 +369,26 @@ const TableNode = (props: NodeProps) => {
             {editingField !== idx && editingType !== idx && (
               <>
                 {field.primaryKey && (
-                  <span className="text-xs bg-blue-500/20 text-blue-600 px-2 py-0.5 rounded">PK</span>
+                  <span className="text-xs bg-[hsl(var(--primary))]/20 text-[hsl(var(--primary))] px-2 py-0.5 rounded font-medium">PK</span>
                 )}
                 {field.foreign_key && (
-                  <span className="text-xs bg-green-500/20 text-green-600 px-2 py-0.5 rounded">FK</span>
+                  <span className="text-xs bg-[hsl(142 52% 47%)]/20 text-[hsl(142 52% 47%)] px-2 py-0.5 rounded font-medium">FK</span>
                 )}
                 {!field.required && (
-                  <span className="text-xs bg-orange-500/20 text-orange-600 px-2 py-0.5 rounded">NULL</span>
+                  <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded font-medium">NULL</span>
                 )}
               </>
             )}
-                <Button
-                  size="sm"
-                  variant="ghost"
+                <button
                   onClick={() => handleRemoveField(idx)}
-              className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                  className="h-5 w-5 p-0 hover:bg-[hsl(var(--destructive))]/20 hover:text-[hsl(var(--destructive))] transition-colors flex items-center justify-center rounded opacity-0 group-hover:opacity-100"
+                  title="Remove field"
                 >
-              <Trash2 className="h-3 w-3" />
-                </Button>
+                  <Trash2 className="h-3 w-3" />
+                </button>
             </div>
             {nameError && (editingField === idx || editingType === idx) && (
-              <div className="text-xs text-red-500 px-2 pb-1">
+              <div className="text-sm text-red-500 px-2 pb-1">
                 {nameError}
               </div>
             )}
@@ -409,18 +396,16 @@ const TableNode = (props: NodeProps) => {
             ))}
       </div>
       
-      {/* Add Field Button and Connect Dropdown - Fixed at Bottom, Outside Scroll Area */}
-      <div className="px-2 pb-1.5 pt-1.5 border-t flex-shrink-0" style={{ borderColor: `${borderColor}40` }}>
+      {/* Add Field Button and Connect Dropdown - Fixed at Bottom, Outside Scroll Area - Cursor IDE style */}
+      <div className="px-2 pb-2 pt-2 border-t border-border/40 flex-shrink-0 bg-[hsl(var(--background))]/30">
         <div className="grid grid-cols-2 gap-1.5">
-            <Button
-              size="sm"
-              variant="outline"
+            <button
               onClick={handleAddField}
-            className="h-7 text-xs"
+              className="h-8 text-sm font-medium px-3 bg-[hsl(var(--background))] border border-border/40 hover:bg-[hsl(var(--muted))]/30 text-foreground rounded-md transition-colors flex items-center gap-1.5"
             >
-            <Plus className="mr-1 h-3 w-3" />
-            Add Field
-            </Button>
+              <Plus className="h-3 w-3" />
+              Add Field
+            </button>
           <Select
             onValueChange={(value) => {
               console.log('Connecting:', data?.currentNodeId, 'to', value);
@@ -429,7 +414,7 @@ const TableNode = (props: NodeProps) => {
               }
             }}
           >
-            <SelectTrigger className="h-7 text-xs">
+            <SelectTrigger className="h-8 text-sm bg-[hsl(var(--background))] border-border/40 hover:bg-[hsl(var(--muted))]/30">
               <SelectValue placeholder="Connect..." />
             </SelectTrigger>
             <SelectContent>
@@ -764,7 +749,7 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
         
         // Calculate dynamic height based on number of fields
         const fieldCount = (entity.fields || []).length;
-        const dynamicHeight = Math.max(200, 120 + fieldCount * 32); // Base height + field height
+        const dynamicHeight = Math.max(250, 140 + fieldCount * 40); // Base height + field height
         
         initialNodes.push({
           id: entity.name,
@@ -1001,7 +986,7 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
       // Calculate fixed size based on fields like regular tables
       const fieldCount = (table.fields || []).length;
       const fixedWidth = 300;
-      const fixedHeight = Math.max(200, 120 + fieldCount * 32);
+      const fixedHeight = Math.max(250, 140 + fieldCount * 40);
       
       // Use different colors for option 1 vs option 2
       const borderColor = isOption1 ? '#3b82f6' : '#10b981';
@@ -1382,39 +1367,39 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
       <style>
         {`.react-flow__attribution { display: none !important; }`}
       </style>
-      {/* Add Table Button */}
+      {/* Add Table Button - Cursor IDE style */}
       <button
         onClick={addNewTable}
-        className="absolute top-4 right-4 z-50 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-lg transition-colors flex items-center gap-2"
+        className="absolute top-3 right-3 z-50 bg-[hsl(var(--card))] border border-border/40 hover:bg-[hsl(var(--card))]/80 text-foreground px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm"
       >
-        <Plus className="h-4 w-4" />
+        <Plus className="h-3.5 w-3.5" />
         Add Table
       </button>
       
-      {/* AI Suggestions Button - One-time fetch */}
+      {/* AI Suggestions Button - Cursor IDE style */}
       <button
         onClick={handleFetchSuggestions}
         disabled={isLoadingSuggestions || !schema?.entities || schema.entities.length === 0}
-        className="absolute top-20 right-4 z-50 px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+        className="absolute top-3 right-32 z-50 px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 bg-[hsl(var(--card))] border border-border/40 hover:bg-[hsl(var(--card))]/80 text-foreground disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
       >
         {isLoadingSuggestions ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Generating...
           </>
         ) : (
           <>
-            <Sparkles className="h-4 w-4" />
-            Get AI Suggestions
+            <Sparkles className="h-3.5 w-3.5" />
+            AI Suggestions
           </>
         )}
       </button>
       
-      {/* Update Schema Button */}
+      {/* Update Schema Button - Cursor IDE style */}
       {onSchemaUpdate && (
         <button
           onClick={handleUpdateSchema}
-          className="absolute top-4 left-4 z-50 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-lg transition-colors flex items-center gap-2"
+          className="absolute top-3 left-3 z-50 bg-[hsl(var(--card))] border border-border/40 hover:bg-[hsl(var(--card))]/80 text-foreground px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm"
         >
           Update Schema
         </button>
@@ -1443,23 +1428,23 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
         onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
         fitView
-        className="bg-background"
+        className="bg-[hsl(var(--background))]"
         minZoom={0.05}
         maxZoom={2}
         nodesDraggable={true}
         nodesConnectable={true}
         elementsSelectable={true}
         panOnScroll={false}
-        connectionLineStyle={{ stroke: '#94a3b8', strokeWidth: 2 }}
+        connectionLineStyle={{ stroke: 'hsl(var(--border))', strokeWidth: 1.5, opacity: 0.6 }}
         defaultEdgeOptions={{
-          style: { strokeWidth: 1.5 },
+          style: { strokeWidth: 1.5, stroke: 'hsl(var(--border))', opacity: 0.7 },
           animated: false,
           type: 'straight',
         }}
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={25} size={1} />
-        <Controls className="bg-card border border-border rounded-lg shadow-lg [&_button]:bg-blue-600 [&_button:hover]:bg-blue-700 [&_button]:text-white [&_button_svg]:text-white" />
+        <Background variant={BackgroundVariant.Dots} gap={25} size={1} className="opacity-20" />
+        <Controls className="bg-[hsl(var(--card))] border border-border/40 rounded-md shadow-sm [&_button]:bg-[hsl(var(--background))] [&_button:hover]:bg-[hsl(var(--card))] [&_button]:text-foreground [&_button]:border [&_button]:border-border/40 [&_button_svg]:text-foreground" />
       </ReactFlow>
     </div>
   );

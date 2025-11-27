@@ -105,15 +105,8 @@ async def chat_next(payload: ChatNextRequest):
             raise HTTPException(status_code=400, detail=f"session_id and answer are required (session_id='{session_id_str}', answer='{answer_str[:50]}')")
         
         logger.info(f"Calling agent_service.next_turn with session_id='{session_id_str}', answer='{answer_str[:100]}...'")
-        try:
-            out = get_agent().next_turn(session_id_str, answer_str)
-            logger.info(f"agent_service.next_turn succeeded")
-        except ValueError as ve:
-            logger.error(f"agent_service.next_turn failed with ValueError: {ve}")
-            raise HTTPException(status_code=400, detail=str(ve))
-        except Exception as e:
-            logger.exception(f"agent_service.next_turn failed: {e}")
-            raise
+        out = get_agent().next_turn(session_id_str, answer_str)
+        logger.info(f"agent_service.next_turn succeeded")
         
         # Ensure valid response structure
         if not isinstance(out, dict):
@@ -128,13 +121,30 @@ async def chat_next(payload: ChatNextRequest):
             out["partial_spec"] = {}
         
         return out
+        
     except ValueError as ve:
+        logger.error(f"agent_service.next_turn failed with ValueError: {ve}")
         raise HTTPException(status_code=400, detail=str(ve))
+    except RuntimeError as re:
+        # Handle AI service errors with more detail
+        error_msg = str(re)
+        logger.error(f"AI service RuntimeError: {error_msg}")
+        if "API" in error_msg or "credentials" in error_msg.lower() or "authentication" in error_msg.lower() or "API_KEY" in error_msg:
+            raise HTTPException(status_code=401, detail=error_msg)
+        elif "rate limit" in error_msg.lower() or "429" in error_msg:
+            raise HTTPException(status_code=429, detail=error_msg)
+        else:
+            raise HTTPException(status_code=503, detail=error_msg)
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("chat_next failed")
-        raise HTTPException(status_code=500, detail="AI service temporarily unavailable. Please try again.")
+        error_type = type(e).__name__
+        error_details = str(e)
+        logger.exception(f"chat_next failed with {error_type}: {error_details}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"AI service error ({error_type}): {error_details}. Please check your ANTHROPIC_API_KEY configuration."
+        )
 
 
 @router.post("/new_project/finish", response_model=ChatFinishResponse)

@@ -6,6 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Send, Loader2, Maximize2, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import { ChartDBViewer, ChartDBViewerRef } from "@/components/ChartDBViewer";
+import { TypewriterText } from "@/components/TypewriterText";
+import { SchemaSummaryBox } from "@/components/SchemaSummaryBox";
+import SailboatIcon from "@/components/SailboatIcon";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +26,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  isStreaming?: boolean; // Track if message is currently streaming
 }
 
 const Chat = () => {
@@ -48,9 +52,23 @@ const Chat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Track which messages have finished streaming
+  const [streamedMessages, setStreamedMessages] = useState<Set<number>>(new Set());
+
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, streamedMessages]);
+
+  // Auto-scroll during streaming with a slight delay for smooth animation
+  useEffect(() => {
+    const hasStreaming = messages.some((msg, idx) => msg.isStreaming && !streamedMessages.has(idx));
+    if (hasStreaming) {
+      const scrollInterval = setInterval(() => {
+        scrollToBottom();
+      }, 100);
+      return () => clearInterval(scrollInterval);
+    }
+  }, [messages, streamedMessages]);
 
   // Handle mouse move for resizing
   useEffect(() => {
@@ -112,7 +130,7 @@ const Chat = () => {
         const result = await response.json();
         console.log('Start conversation result:', result); // Debug log
         setSessionId(result.session_id);
-        setMessages([{ role: 'assistant', content: result.prompt }]);
+        setMessages([{ role: 'assistant', content: result.prompt, isStreaming: true }]);
         setInitializing(false);
       } catch (error) {
         console.error('Error starting conversation:', error); // Debug log
@@ -149,12 +167,29 @@ const Chat = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Try to get detailed error message from response
+        let errorDetail = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || errorData.message || errorDetail;
+        } catch {
+          // If JSON parsing fails, use status text
+          errorDetail = response.statusText || errorDetail;
+        }
+        
+        // Show detailed error to user
+        console.error('API error:', errorDetail);
+        toast.error(`Error: ${errorDetail}`);
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: `Sorry, there was an error: ${errorDetail}. Please try again or check your API configuration.` 
+        }]);
+        return;
       }
 
       const result = await response.json();
       console.log('Chat result:', result); // Debug logging
-      setMessages(prev => [...prev, { role: 'assistant', content: result.prompt }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: result.prompt, isStreaming: true }]);
       
       if (result.done) {
         console.log('Conversation marked as done'); // Debug logging
@@ -163,8 +198,12 @@ const Chat = () => {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Chat error:', error); // Log full error for debugging
       toast.error(`Error: ${errorMessage}`);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, there was an error. Please try again.' }]);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: `Sorry, there was an error: ${errorMessage}. Please check your connection and try again.` 
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -271,50 +310,74 @@ const Chat = () => {
   };
 
   return (
-    <div className="h-screen bg-gradient-to-b from-background to-muted flex overflow-hidden">
+    <div className="h-screen bg-[hsl(var(--background))] flex overflow-hidden">
       {/* Left Side - Chat */}
       <div 
-        className="border-r border-border/30 flex flex-col overflow-hidden"
+        className="border-r border-border/40 flex flex-col overflow-hidden bg-[hsl(var(--background))]"
         style={{ width: `${leftWidth}%` }}
       >
-        {/* Chat Header */}
-        <div className="p-6 border-b border-border/30">
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-foreground via-primary to-accent bg-clip-text text-transparent">
-            ShipDB Agent
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Describe your database and I'll build it
-          </p>
+        {/* Chat Header - IDE-like */}
+        <div className="px-5 py-4 border-b border-border/40 bg-[hsl(var(--card))] flex items-center gap-3">
+          <SailboatIcon className="w-6 h-6 text-[hsl(var(--primary))]" />
+          <div>
+            <h2 className="text-lg font-semibold text-foreground tracking-tight">
+              ShipDB
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5 font-normal">
+              AI Database Designer
+            </p>
+          </div>
         </div>
 
-        {/* Chat Messages Area */}
-        <div className="flex-1 p-6 overflow-y-auto space-y-4">
+        {/* Chat Messages Area - IDE-like */}
+        <div className="flex-1 p-5 overflow-y-auto space-y-3 bg-[hsl(var(--background))]">
           {messages.length === 0 && initializing && (
             <div className="text-center text-muted-foreground mt-8">
               <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
               <p className="text-lg">Starting conversation...</p>
             </div>
           )}
-          {messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+          {messages.map((msg, idx) => {
+            const isStreaming = msg.isStreaming && !streamedMessages.has(idx);
+            return (
               <div
-                className={`max-w-[80%] rounded-lg p-4 ${
-                  msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-card border border-border/50'
-                }`}
+                key={idx}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                <div
+                  className={`max-w-[85%] rounded-md px-4 py-2.5 ${
+                    msg.role === 'user'
+                      ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] border-2 border-black/20'
+                      : 'bg-[hsl(var(--card))] border border-border/40 text-foreground'
+                  }`}
+                >
+                  {msg.role === 'assistant' && isStreaming ? (
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed font-normal">
+                      <TypewriterText
+                        text={msg.content}
+                        speed={15}
+                        messageKey={idx}
+                        onComplete={() => {
+                          setStreamedMessages(prev => new Set([...prev, idx]));
+                        }}
+                      />
+                    </p>
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed font-normal">{msg.content}</p>
+                  )}
+                  
+                  {/* Show schema summary box for assistant messages that contain schema info */}
+                  {msg.role === 'assistant' && !isStreaming && (
+                    <SchemaSummaryBox content={msg.content} />
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-card border border-border/50 rounded-lg p-4">
-                <Loader2 className="h-4 w-4 animate-spin" />
+              <div className="bg-[hsl(var(--card))] border border-border/40 rounded-md px-4 py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
             </div>
           )}
@@ -323,44 +386,38 @@ const Chat = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Chat Input */}
-        <div className="p-6 border-t border-border/30 space-y-3">
+        {/* Chat Input - IDE-like */}
+        <div className="p-4 border-t border-border/40 space-y-3 bg-[hsl(var(--card))]">
           {conversationDone && (
             <Button
               onClick={handleFinish}
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 relative overflow-hidden group"
+              className="w-full bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--primary))]/90 h-9 text-sm font-medium rounded-md"
             >
-              <span className="relative z-10">
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating Schema...
-                  </>
-                ) : (
-                  'Finish & Generate Schema'
-                )}
-              </span>
-              {/* Wave animation */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className="absolute left-0 top-0 w-1/4 h-full bg-white/20 animate-wave"></div>
-              </div>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating Schema...
+                </>
+              ) : (
+                'Finish & Generate Schema'
+              )}
             </Button>
           )}
           
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !isLoading && !initializing && handleSend()}
-              placeholder={initializing ? "Starting conversation..." : "Answer the question..."}
-              className="flex-1 bg-card border-border/50"
+              placeholder={initializing ? "Starting conversation..." : "Type your response..."}
+              className="flex-1 bg-[hsl(var(--background))] border-border/40 text-sm rounded-md h-9 font-normal focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]"
               disabled={isLoading || initializing}
             />
             <Button
               onClick={handleSend}
               disabled={isLoading || initializing || !input.trim()}
-              className="bg-gradient-to-r from-primary to-accent hover:opacity-90"
+              className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--primary))]/90 h-9 w-9 p-0 rounded-md"
             >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -372,51 +429,51 @@ const Chat = () => {
         </div>
       </div>
 
-      {/* Draggable Divider */}
+      {/* Draggable Divider - IDE-like */}
       <div
-        className="w-1 bg-border/50 hover:bg-border cursor-col-resize transition-colors relative group"
+        className="w-1 bg-border/30 hover:bg-border/60 cursor-col-resize transition-colors relative group"
         onMouseDown={() => setIsDragging(true)}
       >
         <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-4 flex items-center justify-center">
-          <div className="w-1 h-12 bg-border rounded-full group-hover:bg-accent transition-colors" />
+          <div className="w-0.5 h-12 bg-border/40 rounded-full group-hover:bg-[hsl(var(--primary))] transition-colors" />
         </div>
       </div>
 
-      {/* Right Side - ChartDB Visualization */}
+      {/* Right Side - ChartDB Visualization - IDE-like */}
       <div 
-        className="flex flex-col p-6 overflow-hidden flex-1"
+        className="flex flex-col overflow-hidden flex-1 bg-[hsl(var(--background))]"
         style={{ width: `${100 - leftWidth}%`, minWidth: 0 }}
       >
         {generatedSchema ? (
-          <div className="flex-1 flex flex-col overflow-hidden space-y-3">
-            {/* Schema Info - Compact */}
-            <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Schema Info - IDE-like toolbar */}
+            <div className="flex items-center gap-2 flex-shrink-0 px-4 py-3 border-b border-border/40 bg-[hsl(var(--card))]">
               <Button
                 variant="outline"
                 size="sm"
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 h-8 text-xs bg-[hsl(var(--background))] border-border/40 hover:bg-[hsl(var(--background))]/80"
                 onClick={() => setShowSchemaModal(true)}
               >
-                <Maximize2 className="h-4 w-4" />
-                <span className="text-xs">Schema</span>
+                <Maximize2 className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">Schema</span>
                 <span className="text-xs text-muted-foreground">({generatedSchema.entities?.length || 0})</span>
               </Button>
               
-              {/* Deploy Button - Next to Schema */}
+              {/* Deploy Button - IDE-like */}
               {(generatedSchema.dynamodb_tables?.length > 0 || generatedSchema.postgres_sql) && (
                 <Button
                   onClick={() => setShowDeployDialog(true)}
-                  className="bg-gradient-to-r from-primary to-accent hover:opacity-90"
+                  className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--primary))]/90 h-8 text-xs font-medium"
                   size="sm"
                 >
-                  <Rocket className="h-4 w-4 mr-2" />
+                  <Rocket className="h-3.5 w-3.5 mr-1.5" />
                   <span className="text-xs">Deploy</span>
                 </Button>
               )}
             </div>
 
-            {/* ChartDB Visualization */}
-            <div className="flex-1 overflow-hidden relative" style={{ minWidth: 0 }}>
+            {/* ChartDB Visualization - IDE-like */}
+            <div className="flex-1 overflow-hidden relative bg-[hsl(var(--background))]" style={{ minWidth: 0 }}>
               <ChartDBViewer
                 ref={chartDBViewerRef}
                 projectId={sessionId || "default"}
@@ -431,20 +488,20 @@ const Chat = () => {
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full bg-[hsl(var(--background))]">
             <div className="text-center text-muted-foreground">
-              <p className="text-lg">Complete the conversation to generate your database schema</p>
-              <p className="text-sm mt-2">The visualization will appear automatically here</p>
+              <p className="text-sm font-medium">Complete the conversation to generate your database schema</p>
+              <p className="text-xs mt-2 text-muted-foreground/70">The visualization will appear automatically here</p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Schema Modal */}
+      {/* Schema Modal - IDE-like */}
       <Dialog open={showSchemaModal} onOpenChange={setShowSchemaModal}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Database Schema - {generatedSchema?.app_type || 'Database'}</DialogTitle>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col bg-[hsl(var(--background))] border-border/40">
+          <DialogHeader className="pb-3 border-b border-border/40">
+            <DialogTitle className="text-base font-semibold">Database Schema - {generatedSchema?.app_type || 'Database'}</DialogTitle>
           </DialogHeader>
           {generatedSchema && (
             <Tabs defaultValue="entities" className="flex-1 overflow-hidden flex flex-col">
@@ -499,31 +556,31 @@ const Chat = () => {
 
               <TabsContent value="postgres" className="flex-1 overflow-y-auto mt-4">
                 {generatedSchema.postgres_sql ? (
-                  <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm font-mono">
+                  <pre className="bg-[hsl(var(--card))] border border-border/40 p-4 rounded-md overflow-x-auto text-xs font-mono text-foreground">
                     {generatedSchema.postgres_sql}
                   </pre>
                 ) : (
-                  <p className="text-muted-foreground">PostgreSQL schema not yet generated.</p>
+                  <p className="text-muted-foreground text-sm">PostgreSQL schema not yet generated.</p>
                 )}
               </TabsContent>
 
               <TabsContent value="json" className="flex-1 overflow-y-auto mt-4">
                 {generatedSchema.json_schema ? (
-                  <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm font-mono">
+                  <pre className="bg-[hsl(var(--card))] border border-border/40 p-4 rounded-md overflow-x-auto text-xs font-mono text-foreground">
                     {JSON.stringify(generatedSchema.json_schema, null, 2)}
                   </pre>
                 ) : (
-                  <p className="text-muted-foreground">JSON schema not yet generated.</p>
+                  <p className="text-muted-foreground text-sm">JSON schema not yet generated.</p>
                 )}
               </TabsContent>
 
               <TabsContent value="dynamodb" className="flex-1 overflow-y-auto mt-4">
                 {generatedSchema.dynamodb_tables ? (
-                  <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm font-mono">
+                  <pre className="bg-[hsl(var(--card))] border border-border/40 p-4 rounded-md overflow-x-auto text-xs font-mono text-foreground">
                     {JSON.stringify(generatedSchema.dynamodb_tables, null, 2)}
                   </pre>
                 ) : (
-                  <p className="text-muted-foreground">DynamoDB schema not yet generated.</p>
+                  <p className="text-muted-foreground text-sm">DynamoDB schema not yet generated.</p>
                 )}
               </TabsContent>
             </Tabs>
@@ -619,3 +676,4 @@ const Chat = () => {
 };
 
 export default Chat;
+

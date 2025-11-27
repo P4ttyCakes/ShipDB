@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import WaveBackground from "@/components/WaveBackground";
 import SailboatIcon from "@/components/SailboatIcon";
-import { Database, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const Index = () => {
@@ -48,17 +48,9 @@ const Index = () => {
       {/* Hero Section */}
       <main className="relative z-10 flex items-center justify-center min-h-screen">
         <div className="container mx-auto px-4 py-20">
-          <div className="flex flex-col items-center text-center max-w-4xl mx-auto">
-            {/* Logo/Icon */}
-            <div className="mb-8 relative">
-              <div className="absolute inset-0 bg-primary/30 blur-3xl rounded-full animate-pulse"></div>
-              <div className="relative bg-gradient-to-br from-primary to-accent p-6 rounded-3xl shadow-2xl shadow-primary/20">
-                <Database className="w-16 h-16 md:w-20 md:h-20 text-background" />
-              </div>
-            </div>
-
+          <div className="flex flex-col items-center justify-center text-center max-w-4xl mx-auto min-h-[60vh]">
             {/* Headline */}
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold mb-6 bg-gradient-to-r from-foreground via-primary to-accent bg-clip-text text-transparent leading-tight tracking-tight">
+            <h1 className="text-7xl md:text-9xl lg:text-[12rem] font-bold mb-6 bg-gradient-to-r from-foreground via-primary to-accent bg-clip-text text-transparent leading-tight tracking-tight">
               ShipDB
             </h1>
             

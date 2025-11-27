@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'],
+        mono: ['"SF Mono"', 'Monaco', 'Inconsolata', '"Fira Code"', '"JetBrains Mono"', '"Droid Sans Mono"', '"Source Code Pro"', 'Consolas', 'monospace'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

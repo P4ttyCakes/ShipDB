@@ -1,8 +1,27 @@
 import boto3
 import os
+import re
 from backend.app.services.deployment.base import BaseDeploymentService
 from backend.app.models.deployment import DeploymentRequest, DeploymentResponse
 from loguru import logger
+
+
+def sanitize_table_name(name: str) -> str:
+    """
+    Sanitize table name to comply with DynamoDB naming rules.
+    DynamoDB table names must match pattern: [a-zA-Z0-9_.-]+
+    Replace spaces and other invalid characters with underscores.
+    """
+    # Replace spaces and invalid characters with underscores
+    sanitized = re.sub(r'[^a-zA-Z0-9_.-]', '_', name)
+    # Remove multiple consecutive underscores
+    sanitized = re.sub(r'_+', '_', sanitized)
+    # Remove leading/trailing underscores
+    sanitized = sanitized.strip('_')
+    # Ensure it's not empty
+    if not sanitized:
+        sanitized = 'table'
+    return sanitized
 
 
 class DynamoDBService(BaseDeploymentService):
@@ -26,8 +45,17 @@ class DynamoDBService(BaseDeploymentService):
             for table_def in request.schema_data:
                 # Update table name to include database prefix
                 original_table_name = table_def['TableName']
-                table_name = f"{request.database_name}_{original_table_name}"
+                # Sanitize both database name and table name
+                sanitized_db_name = sanitize_table_name(request.database_name)
+                sanitized_table_name = sanitize_table_name(original_table_name)
+                table_name = f"{sanitized_db_name}_{sanitized_table_name}"
                 table_def['TableName'] = table_name
+                
+                # Sanitize GSI names if they exist
+                if 'GlobalSecondaryIndexes' in table_def:
+                    for gsi in table_def['GlobalSecondaryIndexes']:
+                        if 'IndexName' in gsi:
+                            gsi['IndexName'] = sanitize_table_name(gsi['IndexName'])
                 
                 # Add project tags
                 if 'Tags' not in table_def:
@@ -52,7 +80,10 @@ class DynamoDBService(BaseDeploymentService):
             logger.info("Processing simplified schema format")
             
             for table_def in request.schema_data.get('tables', []):
-                table_name = f"{request.database_name}_{table_def['name']}"
+                # Sanitize both database name and table name
+                sanitized_db_name = sanitize_table_name(request.database_name)
+                sanitized_table_name = sanitize_table_name(table_def['name'])
+                table_name = f"{sanitized_db_name}_{sanitized_table_name}"
                 
                 # Create table with on-demand billing (simplified format)
                 self.dynamodb.create_table(
