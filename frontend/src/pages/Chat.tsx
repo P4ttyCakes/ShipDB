@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Send, Loader2, Maximize2, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import { ChartDBViewer, ChartDBViewerRef } from "@/components/ChartDBViewer";
+import { TypewriterText } from "@/components/TypewriterText";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,16 +42,27 @@ const Chat = () => {
   const [databaseName, setDatabaseName] = useState("");
   const [deploymentType, setDeploymentType] = useState<'dynamodb' | 'supabase'>('dynamodb');
   const [selectedDeployment, setSelectedDeployment] = useState<'nosql' | 'postgresql' | null>(null);
+  const [completedMessages, setCompletedMessages] = useState<Set<number>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chartDBViewerRef = useRef<ChartDBViewerRef>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const throttledScroll = () => {
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    scrollTimeoutRef.current = setTimeout(() => {
+      scrollToBottom();
+    }, 100); // Throttle to every 100ms
+  };
+
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, completedMessages]);
 
   // Handle mouse move for resizing
   useEffect(() => {
@@ -106,7 +118,38 @@ const Chat = () => {
 
         console.log('Response status:', response.status); // Debug log
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          let errorMessage = '';
+          let errorDetail = '';
+          try {
+            const errorData = await response.json();
+            errorDetail = errorData.detail || '';
+          } catch {
+            // If response is not JSON, use the status text
+            errorDetail = response.statusText || 'Unknown error';
+          }
+          
+          // Create user-friendly error messages based on status code and detail
+          if (response.status === 400) {
+            if (errorDetail.includes('required') || errorDetail.includes('invalid')) {
+              errorMessage = `Invalid request: ${errorDetail}`;
+            } else if (errorDetail.includes('JSON') || errorDetail.includes('parse')) {
+              errorMessage = `The AI service returned an invalid response. Please try again. Details: ${errorDetail}`;
+            } else {
+              errorMessage = `Invalid input: ${errorDetail}`;
+            }
+          } else if (response.status === 500) {
+            if (errorDetail.includes('unavailable') || errorDetail.includes('retries')) {
+              errorMessage = `Service temporarily unavailable: ${errorDetail}`;
+            } else if (errorDetail.includes('JSON') || errorDetail.includes('parse')) {
+              errorMessage = `The AI service had trouble processing your response. Please try rephrasing your answer. Details: ${errorDetail}`;
+            } else {
+              errorMessage = `Server error (${response.status}): ${errorDetail || 'An unexpected error occurred. Please try again.'}`;
+            }
+          } else {
+            errorMessage = `Error (${response.status}): ${errorDetail || response.statusText || 'Unknown error'}`;
+          }
+          
+          throw new Error(errorMessage);
         }
 
         const result = await response.json();
@@ -117,8 +160,8 @@ const Chat = () => {
       } catch (error) {
         console.error('Error starting conversation:', error); // Debug log
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        toast.error(`Error starting conversation: ${errorMessage}`);
-        setMessages([{ role: 'assistant', content: 'Sorry, there was an error starting the conversation. Please refresh the page.' }]);
+        toast.error(`Failed to start conversation: ${errorMessage}`);
+        setMessages([{ role: 'assistant', content: `I couldn't start the conversation. ${errorMessage}. Please refresh the page or try again.` }]);
         setInitializing(false);
       } finally {
         setIsLoading(false);
@@ -149,12 +192,47 @@ const Chat = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errorMessage = '';
+        let errorDetail = '';
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || '';
+        } catch {
+          // If response is not JSON, use the status text
+          errorDetail = response.statusText || 'Unknown error';
+        }
+        
+        // Create user-friendly error messages based on status code and detail
+        if (response.status === 400) {
+          if (errorDetail.includes('required') || errorDetail.includes('invalid session')) {
+            errorMessage = `Invalid request: ${errorDetail}. Please refresh the page and try again.`;
+          } else if (errorDetail.includes('JSON') || errorDetail.includes('parse') || errorDetail.includes('invalid response')) {
+            errorMessage = `The AI service had trouble understanding your response. Please try rephrasing your answer or providing more details. Error: ${errorDetail}`;
+          } else if (errorDetail.includes("doesn't fit") || errorDetail.includes("not match") || errorDetail.includes("does not match")) {
+            errorMessage = `Your answer doesn't match what was asked. ${errorDetail}. Please read the question carefully and try again.`;
+          } else {
+            errorMessage = `Invalid input: ${errorDetail}`;
+          }
+        } else if (response.status === 500) {
+          if (errorDetail.includes('unavailable') || errorDetail.includes('retries')) {
+            errorMessage = `AI service temporarily unavailable: ${errorDetail}. Please wait a moment and try again.`;
+          } else if (errorDetail.includes('JSON') || errorDetail.includes('parse') || errorDetail.includes('invalid response')) {
+            errorMessage = `The AI service had trouble processing your response. Please try rephrasing your answer or providing more context. Error: ${errorDetail}`;
+          } else {
+            errorMessage = `Server error: ${errorDetail || 'An unexpected error occurred. Please try again.'}`;
+          }
+        } else {
+          errorMessage = `Error (${response.status}): ${errorDetail || response.statusText || 'Unknown error'}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
       console.log('Chat result:', result); // Debug logging
+      const newMessageIndex = messages.length + 1; // +1 for user message, +1 for assistant
       setMessages(prev => [...prev, { role: 'assistant', content: result.prompt }]);
+      // Don't mark as completed immediately - let typewriter handle it
       
       if (result.done) {
         console.log('Conversation marked as done'); // Debug logging
@@ -163,8 +241,8 @@ const Chat = () => {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(`Error: ${errorMessage}`);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, there was an error. Please try again.' }]);
+      toast.error(`Failed to process your message: ${errorMessage}`);
+      setMessages(prev => [...prev, { role: 'assistant', content: `I couldn't process your response. ${errorMessage}. Please try again with a different answer.` }]);
     } finally {
       setIsLoading(false);
     }
@@ -182,7 +260,40 @@ const Chat = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errorMessage = '';
+        let errorDetail = '';
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || '';
+        } catch {
+          // If response is not JSON, use the status text
+          errorDetail = response.statusText || 'Unknown error';
+        }
+        
+        // Create user-friendly error messages based on status code and detail
+        if (response.status === 400) {
+          if (errorDetail.includes('required') || errorDetail.includes('invalid session')) {
+            errorMessage = `Invalid request: ${errorDetail}. Please refresh the page and try again.`;
+          } else if (errorDetail.includes('JSON') || errorDetail.includes('parse') || errorDetail.includes('invalid response')) {
+            errorMessage = `The AI service had trouble understanding your response. Please try rephrasing your answer or providing more details. Error: ${errorDetail}`;
+          } else if (errorDetail.includes("doesn't fit") || errorDetail.includes("not match") || errorDetail.includes("does not match")) {
+            errorMessage = `Your answer doesn't match what was asked. ${errorDetail}. Please read the question carefully and try again.`;
+          } else {
+            errorMessage = `Invalid input: ${errorDetail}`;
+          }
+        } else if (response.status === 500) {
+          if (errorDetail.includes('unavailable') || errorDetail.includes('retries')) {
+            errorMessage = `AI service temporarily unavailable: ${errorDetail}. Please wait a moment and try again.`;
+          } else if (errorDetail.includes('JSON') || errorDetail.includes('parse') || errorDetail.includes('invalid response')) {
+            errorMessage = `The AI service had trouble processing your response. Please try rephrasing your answer or providing more context. Error: ${errorDetail}`;
+          } else {
+            errorMessage = `Server error: ${errorDetail || 'An unexpected error occurred. Please try again.'}`;
+          }
+        } else {
+          errorMessage = `Error (${response.status}): ${errorDetail || response.statusText || 'Unknown error'}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -193,7 +304,7 @@ const Chat = () => {
       setGeneratedSchema(result.spec);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(`Error: ${errorMessage}`);
+      toast.error(`Failed to generate schema: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -271,15 +382,15 @@ const Chat = () => {
   };
 
   return (
-    <div className="h-screen bg-gradient-to-b from-background to-muted flex overflow-hidden">
+    <div className="h-screen bg-background flex overflow-hidden">
       {/* Left Side - Chat */}
       <div 
         className="border-r border-border/30 flex flex-col overflow-hidden"
         style={{ width: `${leftWidth}%` }}
       >
         {/* Chat Header */}
-        <div className="p-6 border-b border-border/30">
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-foreground via-primary to-accent bg-clip-text text-transparent">
+        <div className="p-6 border-b border-border bg-card">
+          <h2 className="text-2xl font-bold text-foreground">
             ShipDB Agent
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
@@ -307,7 +418,21 @@ const Chat = () => {
                     : 'bg-card border border-border/50'
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                {msg.role === 'assistant' && !completedMessages.has(idx) ? (
+                  <p className="text-sm">
+                    <TypewriterText 
+                      text={msg.content} 
+                      speed={15}
+                      onComplete={() => {
+                        setCompletedMessages(prev => new Set([...prev, idx]));
+                        scrollToBottom();
+                      }}
+                      onUpdate={throttledScroll}
+                    />
+                  </p>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                )}
               </div>
             </div>
           ))}
@@ -324,27 +449,21 @@ const Chat = () => {
         </div>
 
         {/* Chat Input */}
-        <div className="p-6 border-t border-border/30 space-y-3">
+        <div className="p-6 border-t border-border bg-card space-y-3">
           {conversationDone && (
             <Button
               onClick={handleFinish}
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 relative overflow-hidden group"
+              className="w-full bg-primary hover:bg-primary/85 shadow-md"
             >
-              <span className="relative z-10">
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating Schema...
-                  </>
-                ) : (
-                  'Finish & Generate Schema'
-                )}
-              </span>
-              {/* Wave animation */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className="absolute left-0 top-0 w-1/4 h-full bg-white/20 animate-wave"></div>
-              </div>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating Schema...
+                </>
+              ) : (
+                'Finish & Generate Schema'
+              )}
             </Button>
           )}
           
@@ -360,7 +479,7 @@ const Chat = () => {
             <Button
               onClick={handleSend}
               disabled={isLoading || initializing || !input.trim()}
-              className="bg-gradient-to-r from-primary to-accent hover:opacity-90"
+              className="bg-primary hover:bg-primary/85 shadow-md"
             >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -406,7 +525,7 @@ const Chat = () => {
               {(generatedSchema.dynamodb_tables?.length > 0 || generatedSchema.postgres_sql) && (
                 <Button
                   onClick={() => setShowDeployDialog(true)}
-                  className="bg-gradient-to-r from-primary to-accent hover:opacity-90"
+                  className="bg-primary hover:bg-primary/85 shadow-md"
                   size="sm"
                 >
                   <Rocket className="h-4 w-4 mr-2" />
@@ -548,24 +667,16 @@ const Chat = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <Button
                     onClick={() => setDeploymentType('dynamodb')}
-                    variant={deploymentType === 'dynamodb' ? 'default' : 'outline'}
-                    className={`transition-all duration-300 ${
-                      deploymentType === 'dynamodb'
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
-                        : ''
-                    }`}
+                    variant="outline"
+                    className={deploymentType === 'dynamodb' ? 'bg-muted' : ''}
                   >
                     NoSQL (DynamoDB)
                   </Button>
                   
                   <Button
                     onClick={() => setDeploymentType('supabase')}
-                    variant={deploymentType === 'supabase' ? 'default' : 'outline'}
-                    className={`transition-all duration-300 ${
-                      deploymentType === 'supabase'
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
-                        : ''
-                    }`}
+                    variant="outline"
+                    className={deploymentType === 'supabase' ? 'bg-muted' : ''}
                   >
                     PostgreSQL (Supabase)
                   </Button>
@@ -597,7 +708,7 @@ const Chat = () => {
             <AlertDialogAction
               onClick={handleDeploy}
               disabled={isDeploying || !databaseName.trim()}
-              className="bg-gradient-to-r from-primary to-accent"
+              className="bg-primary hover:bg-primary/85 shadow-md"
             >
               {isDeploying ? (
                 <>

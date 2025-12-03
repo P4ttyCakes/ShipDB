@@ -29,6 +29,17 @@ export const ChartDBViewer = forwardRef<ChartDBViewerRef, ChartDBViewerProps>(({
 
   const handleSchemaUpdate = async (updatedSchema: any) => {
     try {
+      // Validate schema before sending
+      if (!updatedSchema || !updatedSchema.entities || !Array.isArray(updatedSchema.entities)) {
+        throw new Error('Invalid schema structure: missing entities array');
+      }
+      
+      if (updatedSchema.entities.length === 0) {
+        throw new Error('Schema must have at least one entity');
+      }
+      
+      console.log('Updating schema with:', updatedSchema);
+      
       // Update the schema via API
       const response = await fetch(`${API_BASE_URL}/api/schema/update`, {
         method: 'POST',
@@ -42,18 +53,42 @@ export const ChartDBViewer = forwardRef<ChartDBViewerRef, ChartDBViewerProps>(({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update schema');
+        let errorMessage = 'Failed to update schema';
+        try {
+          const errorData = await response.json();
+          if (errorData.detail) {
+            errorMessage = errorData.detail;
+          }
+        } catch {
+          errorMessage = `HTTP error! status: ${response.status}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
+      console.log('Schema update response:', result);
       
-      // Get the updated artifacts from the response
+      // Preserve original schema fields (app_type, db_type, etc.) and merge with updated entities and artifacts
       const updatedSchemaWithArtifacts = {
-        ...updatedSchema,
+        ...schemaData, // Preserve original schema fields
+        ...updatedSchema, // Override with updated entities
         ...result.artifacts, // Include postgres_sql, json_schema, dynamodb_tables
+        entities: updatedSchema.entities, // Ensure entities are from the update
       };
 
+      // Validate the updated schema before setting state
+      if (!updatedSchemaWithArtifacts.entities || !Array.isArray(updatedSchemaWithArtifacts.entities)) {
+        throw new Error('Invalid response: missing entities array');
+      }
+      
+      if (updatedSchemaWithArtifacts.entities.length === 0) {
+        throw new Error('Schema must have at least one entity');
+      }
+
+      console.log('Setting updated schema with', updatedSchemaWithArtifacts.entities.length, 'entities');
+      
       // Update local state with full schema including artifacts
+      // This will trigger a re-render of InteractiveSchemaVisualization
       setSchemaData(updatedSchemaWithArtifacts);
       
       // Call parent's onSchemaUpdate with the complete updated schema
@@ -64,7 +99,10 @@ export const ChartDBViewer = forwardRef<ChartDBViewerRef, ChartDBViewerProps>(({
       toast.success('Schema updated successfully');
     } catch (error) {
       console.error('Error updating schema:', error);
-      toast.error('Failed to update schema');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update schema';
+      toast.error(`Failed to update schema: ${errorMessage}`);
+      // Don't update schemaData on error - keep the current visualization
+      setError(`Failed to update schema: ${errorMessage}`);
     }
   };
 

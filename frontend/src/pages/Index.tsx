@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import WaveBackground from "@/components/WaveBackground";
-import SailboatIcon from "@/components/SailboatIcon";
-import { Database, Sparkles } from "lucide-react";
+import boatImage from "@/assets/boat.png";
+import { Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const Index = () => {
@@ -27,7 +27,7 @@ const Index = () => {
   ];
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-b from-background to-muted overflow-hidden">
+    <div className="relative min-h-screen bg-background overflow-hidden">
       {/* Stars */}
       <div className="absolute inset-0 z-0">
         {stars.map((star, i) => (
@@ -48,17 +48,9 @@ const Index = () => {
       {/* Hero Section */}
       <main className="relative z-10 flex items-center justify-center min-h-screen">
         <div className="container mx-auto px-4 py-20">
-          <div className="flex flex-col items-center text-center max-w-4xl mx-auto">
-            {/* Logo/Icon */}
-            <div className="mb-8 relative">
-              <div className="absolute inset-0 bg-primary/30 blur-3xl rounded-full animate-pulse"></div>
-              <div className="relative bg-gradient-to-br from-primary to-accent p-6 rounded-3xl shadow-2xl shadow-primary/20">
-                <Database className="w-16 h-16 md:w-20 md:h-20 text-background" />
-              </div>
-            </div>
-
+          <div className="flex flex-col items-center justify-center text-center max-w-4xl mx-auto">
             {/* Headline */}
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold mb-6 bg-gradient-to-r from-foreground via-primary to-accent bg-clip-text text-transparent leading-tight tracking-tight">
+            <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-6 text-foreground leading-tight tracking-tight">
               ShipDB
             </h1>
             
@@ -72,7 +64,7 @@ const Index = () => {
               <Button 
                 size="lg"
                 onClick={() => navigate("/chat")}
-                className="bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-all text-lg px-8 py-6 shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:scale-105 duration-300"
+                className="bg-primary hover:bg-primary/85 shadow-lg text-lg px-8 py-6 transition-all duration-200"
               >
                 <Sparkles className="mr-2 h-5 w-5" />
                 Get Started
@@ -82,9 +74,22 @@ const Index = () => {
         </div>
       </main>
 
-      {/* Sailboat floating on waves */}
+      {/* Boat floating on waves */}
       <div className="absolute bottom-[15%] md:bottom-[20%] left-[10%] z-20 animate-float">
-        <SailboatIcon className="w-24 h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 opacity-80 hover:opacity-100 transition-opacity duration-500" />
+        <div 
+          className="w-24 h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 opacity-90 hover:opacity-100 transition-opacity duration-500"
+          style={{
+            backgroundColor: '#4285F4',
+            maskImage: `url(${boatImage})`,
+            maskSize: 'contain',
+            maskRepeat: 'no-repeat',
+            maskPosition: 'center',
+            WebkitMaskImage: `url(${boatImage})`,
+            WebkitMaskSize: 'contain',
+            WebkitMaskRepeat: 'no-repeat',
+            WebkitMaskPosition: 'center',
+          }}
+        />
       </div>
 
       {/* Wave Background - Fixed at bottom */}

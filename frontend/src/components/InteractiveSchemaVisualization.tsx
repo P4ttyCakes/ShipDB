@@ -686,7 +686,18 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
 
   // Parse schema and create nodes
   useEffect(() => {
-    if (!schema?.entities) return;
+    try {
+      if (!schema?.entities) {
+        console.warn('Schema missing entities, skipping node creation');
+        return;
+      }
+      
+      if (!Array.isArray(schema.entities)) {
+        console.error('Schema entities is not an array:', schema.entities);
+        return;
+      }
+      
+      console.log('Creating nodes from schema with', schema.entities.length, 'entities');
 
     // First pass: count relationships to identify important ones
     const relationshipCount: { [key: string]: number } = {};
@@ -794,13 +805,20 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
     setNodes((existingNodes) => {
       if (existingNodes.length === 0) {
         // First time loading - use the initial layout
+        console.log('First time loading, creating', initialNodes.length, 'nodes');
         return initialNodes;
       }
+      
+      console.log('Updating', existingNodes.length, 'existing nodes with', schema.entities.length, 'entities');
       
       // Update existing nodes with new data but preserve positions
       const updatedNodes = existingNodes.map(node => {
         const schemaEntity = schema.entities.find((e: any) => e.name === node.id);
-        if (!schemaEntity) return node;
+        if (!schemaEntity) {
+          // Node exists in visualization but not in schema - keep it (might be manually added)
+          console.log('Keeping node not in schema:', node.id);
+          return node;
+        }
         
         // Find or create the node
         const newData = {
@@ -825,7 +843,17 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
       const existingNodeIds = new Set(existingNodes.map(n => n.id));
       const newNodes = initialNodes.filter(node => !existingNodeIds.has(node.id));
       
-      return [...updatedNodes, ...newNodes];
+      console.log('Adding', newNodes.length, 'new nodes, keeping', updatedNodes.length, 'updated nodes');
+      
+      const finalNodes = [...updatedNodes, ...newNodes];
+      
+      // Ensure we have at least some nodes - if not, something went wrong
+      if (finalNodes.length === 0 && schema.entities.length > 0) {
+        console.error('No nodes created but schema has entities! Falling back to initial nodes');
+        return initialNodes;
+      }
+      
+      return finalNodes;
     });
     
     // Only update edges if they've changed
@@ -838,6 +866,11 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
       // You might want to merge/reconcile edges here
       return existingEdges;
     });
+    } catch (error) {
+      console.error('Error creating nodes from schema:', error);
+      // Don't clear nodes on error - keep existing visualization
+      // Just log the error
+    }
   }, [schema, handleNodeSizeChange, handleConnect, handleFieldsChange]);
 
   // Handle fetching AI suggestions manually
@@ -1063,23 +1096,57 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
   // Convert a ghost node into a regular table node
   const convertGhostToRealTable = useCallback((ghostNode: Node): Node => {
     const nodeData = ghostNode.data as TableNodeData & { isSuggestion?: boolean; originalTable?: any };
-    const tableName = nodeData.originalTable?.name || nodeData.tableName || ghostNode.id;
+    const tableName = nodeData.originalTable?.name || nodeData.tableName || ghostNode.id.replace('suggestion_', '');
     
-    // Get a color for the new table
+    // Get a color for the new table (same as manual creation)
     const color = colorPalette[nodes.length % colorPalette.length];
     
+    // Ensure fields are properly formatted (same structure as manual creation)
+    let fields = nodeData.originalTable?.fields || nodeData.fields || [];
+    
+    // Ensure fields is an array and each field has required properties
+    if (!Array.isArray(fields)) {
+      fields = [];
+    }
+    
+    // Normalize fields to match expected structure (same as manual table creation)
+    fields = fields.map((field: any) => {
+      // Ensure field is an object
+      if (!field || typeof field !== 'object') {
+        return {
+          name: 'field',
+          type: 'string',
+          required: true,
+          primary_key: false,
+        };
+      }
+      
+      // Normalize field properties (normalized values take precedence)
+      return {
+        ...field, // Keep all original properties first
+        name: field.name || 'field',
+        type: field.type || 'string',
+        required: field.required !== undefined ? Boolean(field.required) : true,
+        primary_key: Boolean(field.primary_key || false),
+        unique: Boolean(field.unique || false),
+        foreign_key: field.foreign_key || undefined,
+      };
+    });
+    
+    // Create node exactly like manual table creation
     const realNode: Node = {
       id: tableName,
       type: 'tableNode',
-      position: ghostNode.position, // Keep the same position
+      position: ghostNode.position || { x: 100, y: 100 },
       data: {
         tableName: tableName,
-        fields: nodeData.originalTable?.fields || nodeData.fields || [],
+        fields: fields,
         color: color,
         onSizeChange: handleNodeSizeChange,
         onConnect: handleConnect,
         onFieldsChange: handleFieldsChange,
         currentNodeId: tableName,
+        // allTables will be set when node is added (same as manual creation)
       },
       draggable: true,
       selectable: true,
@@ -1092,62 +1159,79 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
 
   // Handle clicking on a suggestion node to accept it
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    const nodeData = node.data as TableNodeData & { isSuggestion?: boolean; originalTable?: any };
-    
-    // Check if this is a suggestion node
-    if (nodeData.isSuggestion && nodeData.originalTable) {
-      console.log('Accepting suggestion node:', node.id);
+    try {
+      const nodeData = node.data as TableNodeData & { isSuggestion?: boolean; originalTable?: any };
       
-      // Convert ghost to real table
-      const realNode = convertGhostToRealTable(node);
-      
-      // Add the real node to the main nodes array
-      setNodes((prevNodes) => {
-        const allNodes = [...prevNodes, realNode];
-        // Update allTables for all nodes including the new one
-        return allNodes.map(node => ({
-          ...node,
-          data: {
-            ...node.data,
-            allTables: allNodes.map(n => ({ id: n.id, name: (n.data as TableNodeData).tableName || n.id })),
-          },
-        }));
-      });
-      
-      // Convert suggestion edges to real edges
-      setEdges((prevEdges) => {
-        if (suggestionEdges.length > 0) {
-          const realEdges = suggestionEdges
-            .filter(edge => edge.source === node.id)
-            .map(edge => ({
-              ...edge,
-              id: `${realNode.id}-${edge.target}`,
-              source: realNode.id,
-              style: {
-                ...edge.style,
-                opacity: 1,
-                strokeDasharray: '0',
-              },
-            }));
+      // Check if this is a suggestion node
+      if (nodeData.isSuggestion && nodeData.originalTable) {
+        console.log('Accepting suggestion node:', node.id);
+        
+        // Convert ghost to real table (exactly like manual creation)
+        const realNode = convertGhostToRealTable(node);
+        
+        // Validate the node before adding
+        if (!realNode.id || !realNode.data?.tableName) {
+          console.error('Invalid node structure:', realNode);
+          return;
+        }
+        
+        // Add the real node to the main nodes array (same pattern as addNewTable)
+        setNodes((prevNodes) => {
+          // Check if node with this ID already exists
+          if (prevNodes.some(n => n.id === realNode.id)) {
+            console.warn(`Node with id ${realNode.id} already exists`);
+            return prevNodes;
+          }
           
-          return [...prevEdges, ...realEdges];
-        }
-        return prevEdges;
-      });
-      
-      // Remove the suggestion from the ghosts and clear AI suggestions to prevent regeneration
-      setSuggestionNodes([]);
-      setSuggestionEdges([]);
-      setAiSuggestions(null);
-      
-      // Also add the table name to rejected suggestions so it won't be suggested again
-      const tableName = nodeData.originalTable?.name || nodeData.tableName || node.id.replace('suggestion_', '');
-      setRejectedSuggestions(prev => {
-        if (!prev.includes(tableName)) {
-          return [...prev, tableName];
-        }
-        return prev;
-      });
+          const allNodes = [...prevNodes, realNode];
+          // Update allTables for all nodes including the new one (same as manual creation)
+          return allNodes.map(node => ({
+            ...node,
+            data: {
+              ...node.data,
+              allTables: allNodes.map(n => ({ id: n.id, name: (n.data as TableNodeData).tableName || n.id })),
+            },
+          }));
+        });
+        
+        // Convert suggestion edges to real edges
+        setEdges((prevEdges) => {
+          if (suggestionEdges.length > 0) {
+            const realEdges = suggestionEdges
+              .filter(edge => edge.source === node.id)
+              .map(edge => ({
+                ...edge,
+                id: `${realNode.id}-${edge.target}-${Date.now()}`,
+                source: realNode.id,
+                style: {
+                  ...edge.style,
+                  opacity: 1,
+                  strokeDasharray: '0',
+                },
+              }));
+            
+            return [...prevEdges, ...realEdges];
+          }
+          return prevEdges;
+        });
+        
+        // Remove the suggestion from the ghosts and clear AI suggestions to prevent regeneration
+        setSuggestionNodes([]);
+        setSuggestionEdges([]);
+        setAiSuggestions(null);
+        
+        // Also add the table name to rejected suggestions so it won't be suggested again
+        const tableName = nodeData.originalTable?.name || nodeData.tableName || node.id.replace('suggestion_', '');
+        setRejectedSuggestions(prev => {
+          if (!prev.includes(tableName)) {
+            return [...prev, tableName];
+          }
+          return prev;
+        });
+      }
+    } catch (error) {
+      console.error('Error accepting suggestion node:', error);
+      // Don't crash - just log the error
     }
   }, [suggestionEdges, convertGhostToRealTable]);
 
@@ -1280,13 +1364,21 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
           name: (node.data as TableNodeData).tableName || node.id,
           fields: fields,
         };
-             });
+      });
       
       // Create a map of target entities to their source entities (from edges)
+      // Edges use node IDs which match entity names (since nodes are created with id: entity.name)
       const targetToSourceMap = new Map<string, string>();
       edges.forEach(edge => {
         if (edge.target && edge.source) {
-          targetToSourceMap.set(edge.target as string, edge.source as string);
+          // Get the entity name from the target node
+          const targetNode = nodes.find(n => n.id === edge.target);
+          const sourceNode = nodes.find(n => n.id === edge.source);
+          if (targetNode && sourceNode) {
+            const targetEntityName = (targetNode.data as TableNodeData).tableName || targetNode.id;
+            const sourceEntityName = (sourceNode.data as TableNodeData).tableName || sourceNode.id;
+            targetToSourceMap.set(targetEntityName, sourceEntityName);
+          }
         }
       });
       
@@ -1306,7 +1398,7 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
                 ...field,
                 foreign_key: {
                   table: sourceTable,
-                  column: 'id',
+                  field: 'id',
                 },
               };
             }
@@ -1320,23 +1412,44 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
               ...firstField,
               foreign_key: {
                 table: sourceTable,
-                column: 'id',
+                field: 'id',
               },
             };
           }
         }
       });
       
+      // Ensure we have a valid schema structure
+      if (!schema) {
+        throw new Error('No schema provided');
+      }
+      
       const updatedSchema = {
         ...schema,
         entities: updatedEntities,
       };
       
+      // Validate the schema has required fields
+      if (!updatedSchema.entities || updatedSchema.entities.length === 0) {
+        throw new Error('Schema must have at least one entity');
+      }
+      
+      // Validate each entity has required fields
+      updatedSchema.entities.forEach((entity: any, idx: number) => {
+        if (!entity.name) {
+          throw new Error(`Entity at index ${idx} is missing a name`);
+        }
+        if (!entity.fields || !Array.isArray(entity.fields)) {
+          throw new Error(`Entity "${entity.name}" is missing fields array`);
+        }
+      });
+      
       console.log('Updated schema:', updatedSchema);
       onSchemaUpdate(updatedSchema);
     } catch (error) {
       console.error('Error in handleUpdateSchema:', error);
-      alert(`Error updating schema: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Error updating schema: ${errorMessage}`);
     }
   }, [nodes, edges, schema, onSchemaUpdate]);
 
@@ -1382,39 +1495,42 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
       <style>
         {`.react-flow__attribution { display: none !important; }`}
       </style>
-      {/* Add Table Button */}
-      <button
-        onClick={addNewTable}
-        className="absolute top-4 right-4 z-50 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-lg transition-colors flex items-center gap-2"
-      >
-        <Plus className="h-4 w-4" />
-        Add Table
-      </button>
-      
-      {/* AI Suggestions Button - One-time fetch */}
-      <button
-        onClick={handleFetchSuggestions}
-        disabled={isLoadingSuggestions || !schema?.entities || schema.entities.length === 0}
-        className="absolute top-20 right-4 z-50 px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isLoadingSuggestions ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Generating...
-          </>
-        ) : (
-          <>
-            <Sparkles className="h-4 w-4" />
-            Get AI Suggestions
-          </>
-        )}
-      </button>
+      {/* Button Group - Top Right */}
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+        {/* AI Suggestions Button - One-time fetch */}
+        <button
+          onClick={handleFetchSuggestions}
+          disabled={isLoadingSuggestions || !schema?.entities || schema.entities.length === 0}
+          className="px-3 py-1.5 rounded-md text-xs transition-all flex items-center gap-2 border border-border bg-background hover:bg-muted text-foreground disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+        >
+          {isLoadingSuggestions ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-3.5 w-3.5" />
+              Get AI Suggestions
+            </>
+          )}
+        </button>
+        
+        {/* Add Table Button */}
+        <button
+          onClick={addNewTable}
+          className="border border-border bg-background hover:bg-muted text-foreground px-3 py-1.5 rounded-md text-xs transition-colors flex items-center gap-2 shadow-sm"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add Table
+        </button>
+      </div>
       
       {/* Update Schema Button */}
       {onSchemaUpdate && (
         <button
           onClick={handleUpdateSchema}
-          className="absolute top-4 left-4 z-50 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-lg transition-colors flex items-center gap-2"
+          className="absolute top-4 left-4 z-50 border border-border bg-background hover:bg-muted text-foreground px-3 py-1.5 rounded-md text-xs transition-colors flex items-center gap-2 shadow-sm"
         >
           Update Schema
         </button>
@@ -1458,8 +1574,8 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
         }}
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={25} size={1} />
-        <Controls className="bg-card border border-border rounded-lg shadow-lg [&_button]:bg-blue-600 [&_button:hover]:bg-blue-700 [&_button]:text-white [&_button_svg]:text-white" />
+        <Background variant={BackgroundVariant.Dots} gap={40} size={1.5} />
+        <Controls className="bg-background border border-border rounded-md shadow-sm [&_button]:bg-background [&_button:hover]:bg-muted [&_button]:text-foreground [&_button]:border [&_button]:border-border [&_button]:w-7 [&_button]:h-7 [&_button_svg]:w-3.5 [&_button_svg]:h-3.5 [&_button_svg]:text-foreground" />
       </ReactFlow>
     </div>
   );
