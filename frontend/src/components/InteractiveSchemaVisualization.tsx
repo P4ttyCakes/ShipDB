@@ -17,17 +17,41 @@ import {
   addEdge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Trash2, Plus, Sparkles, X, Loader2 } from 'lucide-react';
+import { Trash2, Plus, Sparkles, X, Loader2, Link2, Settings2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Field {
   name: string;
   type: string;
   primaryKey?: boolean;
+  primary_key?: boolean;
   foreignKey?: any;
+  foreign_key?: {
+    table: string;
+    field: string;
+    onDelete?: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION';
+    onUpdate?: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION';
+  };
   required?: boolean;
+  unique?: boolean;
+  default?: string | number;
+  autoIncrement?: boolean;
+  auto_increment?: boolean;
+  length?: number;
+  precision?: number;
+  scale?: number;
+  min?: number | string;
+  max?: number | string;
+  minLength?: number;
+  maxLength?: number;
+  enum?: string[];
+  check?: string;
 }
 
 interface Table {
@@ -81,6 +105,50 @@ const TableNode = (props: NodeProps) => {
   const [editingField, setEditingField] = useState<number | null>(null);
   const [editingType, setEditingType] = useState<number | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [fkDialogOpen, setFkDialogOpen] = useState(false);
+  const [fkEditingIndex, setFkEditingIndex] = useState<number | null>(null);
+  const [fkFormData, setFkFormData] = useState<{
+    targetTable: string;
+    targetField: string;
+    onDelete: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION';
+    onUpdate: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION';
+  }>({
+    targetTable: '',
+    targetField: 'id',
+    onDelete: 'RESTRICT',
+    onUpdate: 'RESTRICT',
+  });
+  const [fieldPropsDialogOpen, setFieldPropsDialogOpen] = useState(false);
+  const [fieldPropsEditingIndex, setFieldPropsEditingIndex] = useState<number | null>(null);
+  const [fieldPropsFormData, setFieldPropsFormData] = useState<{
+    unique: boolean;
+    required: boolean;
+    default: string;
+    autoIncrement: boolean;
+    length: string;
+    precision: string;
+    scale: string;
+    min: string;
+    max: string;
+    minLength: string;
+    maxLength: string;
+    enum: string[];
+    check: string;
+  }>({
+    unique: false,
+    required: true,
+    default: '',
+    autoIncrement: false,
+    length: '',
+    precision: '',
+    scale: '',
+    min: '',
+    max: '',
+    minLength: '',
+    maxLength: '',
+    enum: [],
+    check: '',
+  });
 
   // Update fields when data changes from parent
   useEffect(() => {
@@ -136,6 +204,156 @@ const TableNode = (props: NodeProps) => {
       data.onFieldsChange(props.id as string, updatedFields);
     }
   };
+
+  const handleOpenFkDialog = (index: number) => {
+    const field = fields[index];
+    const existingFk = field.foreign_key || field.foreignKey;
+    
+    setFkEditingIndex(index);
+    setFkFormData({
+      targetTable: existingFk?.table || '',
+      targetField: existingFk?.field || 'id',
+      onDelete: existingFk?.onDelete || 'RESTRICT',
+      onUpdate: existingFk?.onUpdate || 'RESTRICT',
+    });
+    setFkDialogOpen(true);
+  };
+
+  const handleSaveFk = () => {
+    if (fkEditingIndex !== null && fkFormData.targetTable) {
+      handleUpdateField(fkEditingIndex, {
+        foreign_key: {
+          table: fkFormData.targetTable,
+          field: fkFormData.targetField,
+          onDelete: fkFormData.onDelete,
+          onUpdate: fkFormData.onUpdate,
+        },
+      });
+      setFkDialogOpen(false);
+      setFkEditingIndex(null);
+    }
+  };
+
+  const handleRemoveFk = () => {
+    if (fkEditingIndex !== null) {
+      handleUpdateField(fkEditingIndex, {
+        foreign_key: undefined,
+        foreignKey: undefined,
+      });
+      setFkDialogOpen(false);
+      setFkEditingIndex(null);
+    }
+  };
+
+  const handleTogglePrimaryKey = (index: number) => {
+    const field = fields[index];
+    const isCurrentlyPk = field.primaryKey || field.primary_key;
+    
+    // Toggle primary key
+    handleUpdateField(index, {
+      primaryKey: !isCurrentlyPk,
+      primary_key: !isCurrentlyPk,
+    });
+  };
+
+  const handleOpenFieldPropsDialog = (index: number) => {
+    const field = fields[index];
+    
+    setFieldPropsEditingIndex(index);
+    setFieldPropsFormData({
+      unique: field.unique || false,
+      required: field.required !== undefined ? field.required : true,
+      default: field.default !== undefined ? String(field.default) : '',
+      autoIncrement: field.autoIncrement || field.auto_increment || false,
+      length: field.length !== undefined ? String(field.length) : '',
+      precision: field.precision !== undefined ? String(field.precision) : '',
+      scale: field.scale !== undefined ? String(field.scale) : '',
+      min: field.min !== undefined ? String(field.min) : '',
+      max: field.max !== undefined ? String(field.max) : '',
+      minLength: field.minLength !== undefined ? String(field.minLength) : '',
+      maxLength: field.maxLength !== undefined ? String(field.maxLength) : '',
+      enum: field.enum || [],
+      check: field.check || '',
+    });
+    setFieldPropsDialogOpen(true);
+  };
+
+  const handleSaveFieldProps = () => {
+    if (fieldPropsEditingIndex !== null) {
+      const updates: any = {
+        unique: fieldPropsFormData.unique,
+        required: fieldPropsFormData.required,
+        autoIncrement: fieldPropsFormData.autoIncrement,
+        auto_increment: fieldPropsFormData.autoIncrement,
+      };
+
+      // Only add properties if they have values, otherwise clear them
+      if (fieldPropsFormData.default.trim()) {
+        // Try to parse as number, otherwise keep as string
+        const numValue = Number(fieldPropsFormData.default);
+        updates.default = isNaN(numValue) ? fieldPropsFormData.default : numValue;
+      } else {
+        updates.default = undefined;
+      }
+
+      if (fieldPropsFormData.length.trim()) {
+        updates.length = parseInt(fieldPropsFormData.length) || undefined;
+      } else {
+        updates.length = undefined;
+      }
+      if (fieldPropsFormData.precision.trim()) {
+        updates.precision = parseInt(fieldPropsFormData.precision) || undefined;
+      } else {
+        updates.precision = undefined;
+      }
+      if (fieldPropsFormData.scale.trim()) {
+        updates.scale = parseInt(fieldPropsFormData.scale) || undefined;
+      } else {
+        updates.scale = undefined;
+      }
+      if (fieldPropsFormData.min.trim()) {
+        const numValue = Number(fieldPropsFormData.min);
+        updates.min = isNaN(numValue) ? fieldPropsFormData.min : numValue;
+      } else {
+        updates.min = undefined;
+      }
+      if (fieldPropsFormData.max.trim()) {
+        const numValue = Number(fieldPropsFormData.max);
+        updates.max = isNaN(numValue) ? fieldPropsFormData.max : numValue;
+      } else {
+        updates.max = undefined;
+      }
+      if (fieldPropsFormData.minLength.trim()) {
+        updates.minLength = parseInt(fieldPropsFormData.minLength) || undefined;
+      } else {
+        updates.minLength = undefined;
+      }
+      if (fieldPropsFormData.maxLength.trim()) {
+        updates.maxLength = parseInt(fieldPropsFormData.maxLength) || undefined;
+      } else {
+        updates.maxLength = undefined;
+      }
+      if (fieldPropsFormData.enum.length > 0) {
+        updates.enum = fieldPropsFormData.enum;
+      } else {
+        updates.enum = undefined;
+      }
+      if (fieldPropsFormData.check.trim()) {
+        updates.check = fieldPropsFormData.check;
+      } else {
+        updates.check = undefined;
+      }
+
+      handleUpdateField(fieldPropsEditingIndex, updates);
+      setFieldPropsDialogOpen(false);
+      setFieldPropsEditingIndex(null);
+    }
+  };
+
+  // Get available tables for FK target (exclude current table)
+  const availableTables = (data?.allTables || []).filter(
+    (table: { id: string; name: string }) => table.id !== props.id
+  );
 
   const bgColor = data?.color?.bg || 'hsl(var(--card))';
   const borderColor = data?.color?.border || 'hsl(var(--border))';
@@ -380,17 +598,70 @@ const TableNode = (props: NodeProps) => {
             
             {editingField !== idx && editingType !== idx && (
               <>
-                {field.primaryKey && (
-                  <span className="text-xs bg-blue-500/20 text-blue-600 px-2 py-0.5 rounded">PK</span>
+                {(field.primaryKey || field.primary_key) && (
+                  <span 
+                    className="text-xs bg-blue-500/20 text-blue-600 px-2 py-0.5 rounded cursor-pointer hover:bg-blue-500/30 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTogglePrimaryKey(idx);
+                    }}
+                    title="Click to remove primary key"
+                  >
+                    PK
+                  </span>
                 )}
-                {field.foreign_key && (
-                  <span className="text-xs bg-green-500/20 text-green-600 px-2 py-0.5 rounded">FK</span>
+                {!(field.primaryKey || field.primary_key) && (
+                  <span 
+                    className="text-xs bg-gray-200/50 text-gray-500 px-2 py-0.5 rounded cursor-pointer hover:bg-blue-500/20 hover:text-blue-600 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTogglePrimaryKey(idx);
+                    }}
+                    title="Click to set as primary key"
+                  >
+                    PK
+                  </span>
+                )}
+                {(field.foreign_key || field.foreignKey) && (
+                  <span 
+                    className="text-xs bg-green-500/20 text-green-600 px-2 py-0.5 rounded cursor-help"
+                    title={`FK → ${(field.foreign_key || field.foreignKey)?.table || '?'}.${(field.foreign_key || field.foreignKey)?.field || 'id'}`}
+                  >
+                    FK
+                  </span>
+                )}
+                {field.unique && (
+                  <span className="text-xs bg-purple-500/20 text-purple-600 px-2 py-0.5 rounded" title="Unique constraint">UQ</span>
                 )}
                 {!field.required && (
                   <span className="text-xs bg-orange-500/20 text-orange-600 px-2 py-0.5 rounded">NULL</span>
                 )}
               </>
             )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenFkDialog(idx);
+                  }}
+                  className="h-6 w-6 p-0 hover:bg-primary/10 hover:text-primary"
+                  title="Set Foreign Key"
+                >
+                  <Link2 className="h-3 w-3" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenFieldPropsDialog(idx);
+                  }}
+                  className="h-6 w-6 p-0 hover:bg-primary/10 hover:text-primary"
+                  title="Field Properties"
+                >
+                  <Settings2 className="h-3 w-3" />
+                </Button>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -446,6 +717,317 @@ const TableNode = (props: NodeProps) => {
           </Select>
         </div>
       </div>
+
+      {/* Foreign Key Dialog */}
+      <Dialog open={fkDialogOpen} onOpenChange={setFkDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Set Foreign Key</DialogTitle>
+            <DialogDescription>
+              Configure the foreign key relationship for this field.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="target-table">Target Table</Label>
+              <Select
+                value={fkFormData.targetTable}
+                onValueChange={(value) => setFkFormData({ ...fkFormData, targetTable: value })}
+              >
+                <SelectTrigger id="target-table">
+                  <SelectValue placeholder="Select target table" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableTables.length > 0 ? (
+                    availableTables.map((table: { id: string; name: string }) => (
+                      <SelectItem key={table.id} value={table.id}>
+                        {table.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none" disabled>No tables available</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="target-field">Target Field</Label>
+              <Input
+                id="target-field"
+                value={fkFormData.targetField}
+                onChange={(e) => setFkFormData({ ...fkFormData, targetField: e.target.value })}
+                placeholder="id"
+              />
+              <p className="text-xs text-muted-foreground">
+                The field in the target table (defaults to "id")
+              </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="on-delete">ON DELETE</Label>
+              <Select
+                value={fkFormData.onDelete}
+                onValueChange={(value: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION') => 
+                  setFkFormData({ ...fkFormData, onDelete: value })
+                }
+              >
+                <SelectTrigger id="on-delete">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CASCADE">CASCADE</SelectItem>
+                  <SelectItem value="SET NULL">SET NULL</SelectItem>
+                  <SelectItem value="RESTRICT">RESTRICT</SelectItem>
+                  <SelectItem value="NO ACTION">NO ACTION</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="on-update">ON UPDATE</Label>
+              <Select
+                value={fkFormData.onUpdate}
+                onValueChange={(value: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION') => 
+                  setFkFormData({ ...fkFormData, onUpdate: value })
+                }
+              >
+                <SelectTrigger id="on-update">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CASCADE">CASCADE</SelectItem>
+                  <SelectItem value="SET NULL">SET NULL</SelectItem>
+                  <SelectItem value="RESTRICT">RESTRICT</SelectItem>
+                  <SelectItem value="NO ACTION">NO ACTION</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            {(fields[fkEditingIndex || 0]?.foreign_key || fields[fkEditingIndex || 0]?.foreignKey) && (
+              <Button
+                variant="destructive"
+                onClick={handleRemoveFk}
+              >
+                Remove FK
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFkDialogOpen(false);
+                setFkEditingIndex(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveFk}
+              disabled={!fkFormData.targetTable}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Field Properties Dialog */}
+      <Dialog open={fieldPropsDialogOpen} onOpenChange={setFieldPropsDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Field Properties</DialogTitle>
+            <DialogDescription>
+              Configure advanced properties for this field.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            {/* Basic Constraints */}
+            <div className="grid gap-4">
+              <h4 className="text-sm font-semibold">Constraints</h4>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="unique"
+                  checked={fieldPropsFormData.unique}
+                  onCheckedChange={(checked) => 
+                    setFieldPropsFormData({ ...fieldPropsFormData, unique: checked as boolean })
+                  }
+                />
+                <Label htmlFor="unique" className="cursor-pointer">Unique</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="required"
+                  checked={fieldPropsFormData.required}
+                  onCheckedChange={(checked) => 
+                    setFieldPropsFormData({ ...fieldPropsFormData, required: checked as boolean })
+                  }
+                />
+                <Label htmlFor="required" className="cursor-pointer">Required (NOT NULL)</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="auto-increment"
+                  checked={fieldPropsFormData.autoIncrement}
+                  onCheckedChange={(checked) => 
+                    setFieldPropsFormData({ ...fieldPropsFormData, autoIncrement: checked as boolean })
+                  }
+                />
+                <Label htmlFor="auto-increment" className="cursor-pointer">Auto Increment</Label>
+              </div>
+            </div>
+
+            {/* Default Value */}
+            <div className="grid gap-2">
+              <Label htmlFor="default-value">Default Value</Label>
+              <Input
+                id="default-value"
+                value={fieldPropsFormData.default}
+                onChange={(e) => setFieldPropsFormData({ ...fieldPropsFormData, default: e.target.value })}
+                placeholder="e.g., 0, 'text', NOW()"
+              />
+            </div>
+
+            {/* Type-specific Properties */}
+            <div className="grid gap-4">
+              <h4 className="text-sm font-semibold">Type Properties</h4>
+              
+              {/* Length (for VARCHAR, CHAR, etc.) */}
+              <div className="grid gap-2">
+                <Label htmlFor="length">Length</Label>
+                <Input
+                  id="length"
+                  type="number"
+                  value={fieldPropsFormData.length}
+                  onChange={(e) => setFieldPropsFormData({ ...fieldPropsFormData, length: e.target.value })}
+                  placeholder="e.g., 255 for VARCHAR(255)"
+                />
+              </div>
+
+              {/* Precision and Scale (for DECIMAL, NUMERIC) */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="precision">Precision</Label>
+                  <Input
+                    id="precision"
+                    type="number"
+                    value={fieldPropsFormData.precision}
+                    onChange={(e) => setFieldPropsFormData({ ...fieldPropsFormData, precision: e.target.value })}
+                    placeholder="e.g., 10"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="scale">Scale</Label>
+                  <Input
+                    id="scale"
+                    type="number"
+                    value={fieldPropsFormData.scale}
+                    onChange={(e) => setFieldPropsFormData({ ...fieldPropsFormData, scale: e.target.value })}
+                    placeholder="e.g., 2"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Check Constraints */}
+            <div className="grid gap-4">
+              <h4 className="text-sm font-semibold">Check Constraints</h4>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="min-value">Min Value</Label>
+                  <Input
+                    id="min-value"
+                    value={fieldPropsFormData.min}
+                    onChange={(e) => setFieldPropsFormData({ ...fieldPropsFormData, min: e.target.value })}
+                    placeholder="Minimum value"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="max-value">Max Value</Label>
+                  <Input
+                    id="max-value"
+                    value={fieldPropsFormData.max}
+                    onChange={(e) => setFieldPropsFormData({ ...fieldPropsFormData, max: e.target.value })}
+                    placeholder="Maximum value"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="min-length">Min Length</Label>
+                  <Input
+                    id="min-length"
+                    type="number"
+                    value={fieldPropsFormData.minLength}
+                    onChange={(e) => setFieldPropsFormData({ ...fieldPropsFormData, minLength: e.target.value })}
+                    placeholder="Minimum length"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="max-length">Max Length</Label>
+                  <Input
+                    id="max-length"
+                    type="number"
+                    value={fieldPropsFormData.maxLength}
+                    onChange={(e) => setFieldPropsFormData({ ...fieldPropsFormData, maxLength: e.target.value })}
+                    placeholder="Maximum length"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="check-constraint">Custom Check Constraint</Label>
+                <Input
+                  id="check-constraint"
+                  value={fieldPropsFormData.check}
+                  onChange={(e) => setFieldPropsFormData({ ...fieldPropsFormData, check: e.target.value })}
+                  placeholder="e.g., value > 0 AND value < 100"
+                />
+              </div>
+            </div>
+
+            {/* Enum Values */}
+            <div className="grid gap-4">
+              <h4 className="text-sm font-semibold">Enum Values</h4>
+              <div className="grid gap-2">
+                <Label>Enum Options (one per line)</Label>
+                <Textarea
+                  value={fieldPropsFormData.enum.join('\n')}
+                  onChange={(e) => {
+                    const enumValues = e.target.value.split('\n').filter(v => v.trim());
+                    setFieldPropsFormData({ ...fieldPropsFormData, enum: enumValues });
+                  }}
+                  placeholder="option1&#10;option2&#10;option3"
+                  rows={4}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter one enum value per line. Leave empty if not using enum type.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFieldPropsDialogOpen(false);
+                setFieldPropsEditingIndex(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSaveFieldProps}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -1342,6 +1924,51 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
       const updatedEntities = realNodes.map(node => {
         let fields = (node.data as TableNodeData).fields || [];
         
+        // Normalize fields - preserve all field properties
+        fields = fields.map((field: any) => {
+          const normalizedField: any = {
+            name: field.name,
+            type: field.type,
+            primary_key: field.primaryKey || field.primary_key || false,
+            required: field.required !== undefined ? field.required : true,
+          };
+          
+          // Preserve all optional properties
+          if (field.unique !== undefined) normalizedField.unique = field.unique;
+          if (field.default !== undefined) normalizedField.default = field.default;
+          if (field.autoIncrement !== undefined) normalizedField.auto_increment = field.autoIncrement;
+          if (field.auto_increment !== undefined) normalizedField.auto_increment = field.auto_increment;
+          if (field.length !== undefined) normalizedField.length = field.length;
+          if (field.precision !== undefined) normalizedField.precision = field.precision;
+          if (field.scale !== undefined) normalizedField.scale = field.scale;
+          if (field.min !== undefined) normalizedField.min = field.min;
+          if (field.max !== undefined) normalizedField.max = field.max;
+          if (field.minLength !== undefined) normalizedField.min_length = field.minLength;
+          if (field.maxLength !== undefined) normalizedField.max_length = field.maxLength;
+          if (field.enum && field.enum.length > 0) normalizedField.enum = field.enum;
+          if (field.check) normalizedField.check = field.check;
+          
+          // Preserve foreign_key if it exists (with onDelete/onUpdate)
+          if (field.foreign_key) {
+            normalizedField.foreign_key = {
+              table: field.foreign_key.table,
+              field: field.foreign_key.field || 'id',
+              onDelete: field.foreign_key.onDelete || 'RESTRICT',
+              onUpdate: field.foreign_key.onUpdate || 'RESTRICT',
+            };
+          } else if (field.foreignKey) {
+            // Handle legacy foreignKey format
+            normalizedField.foreign_key = {
+              table: field.foreignKey.table,
+              field: field.foreignKey.field || 'id',
+              onDelete: field.foreignKey.onDelete || 'RESTRICT',
+              onUpdate: field.foreignKey.onUpdate || 'RESTRICT',
+            };
+          }
+          
+          return normalizedField;
+        });
+        
         // If table has no fields, add a default id field for DynamoDB
         if (fields.length === 0) {
           fields = [
@@ -1399,6 +2026,8 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
                 foreign_key: {
                   table: sourceTable,
                   field: 'id',
+                  onDelete: 'RESTRICT',
+                  onUpdate: 'RESTRICT',
                 },
               };
             }
@@ -1413,6 +2042,8 @@ export const InteractiveSchemaVisualization = ({ schema, onSchemaUpdate }: Inter
               foreign_key: {
                 table: sourceTable,
                 field: 'id',
+                onDelete: 'RESTRICT',
+                onUpdate: 'RESTRICT',
               },
             };
           }

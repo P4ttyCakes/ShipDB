@@ -87,6 +87,15 @@ async def chat_start(payload: ChatStartRequest):
         out = get_agent().start_session(payload.name, payload.description)
         logger.info(f"Session started successfully: session_id='{out.get('session_id')}'")
         return out
+    except RuntimeError as e:
+        if "ANTHROPIC_API_KEY" in str(e) or "not configured" in str(e):
+            logger.error("AI agent service not configured: ANTHROPIC_API_KEY missing")
+            raise HTTPException(
+                status_code=503,
+                detail="AI service is not configured. Please set ANTHROPIC_API_KEY in your .env file to use the chat agent feature."
+            )
+        logger.exception("chat_start failed with RuntimeError")
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.exception("chat_start failed")
         raise HTTPException(status_code=500, detail=str(e))
@@ -108,6 +117,15 @@ async def chat_next(payload: ChatNextRequest):
         try:
             out = get_agent().next_turn(session_id_str, answer_str)
             logger.info(f"agent_service.next_turn succeeded")
+        except RuntimeError as e:
+            if "ANTHROPIC_API_KEY" in str(e) or "not configured" in str(e):
+                logger.error("AI agent service not configured: ANTHROPIC_API_KEY missing")
+                raise HTTPException(
+                    status_code=503,
+                    detail="AI service is not configured. Please set ANTHROPIC_API_KEY in your .env file to use the chat agent feature."
+                )
+            logger.exception(f"agent_service.next_turn failed with RuntimeError: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
         except ValueError as ve:
             logger.error(f"agent_service.next_turn failed with ValueError: {ve}")
             raise HTTPException(status_code=400, detail=str(ve))
@@ -128,6 +146,15 @@ async def chat_next(payload: ChatNextRequest):
             out["partial_spec"] = {}
         
         return out
+    except RuntimeError as e:
+        if "ANTHROPIC_API_KEY" in str(e) or "not configured" in str(e):
+            logger.error("AI agent service not configured: ANTHROPIC_API_KEY missing")
+            raise HTTPException(
+                status_code=503,
+                detail="AI service is not configured. Please set ANTHROPIC_API_KEY in your .env file to use the chat agent feature."
+            )
+        logger.exception("chat_next failed with RuntimeError")
+        raise HTTPException(status_code=500, detail=str(e))
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except HTTPException:
@@ -154,6 +181,15 @@ async def chat_finish(payload: ChatFinishRequest):
             final_spec = spec
         
         return {"project_id": out["project_id"], "spec": final_spec}
+    except RuntimeError as e:
+        if "ANTHROPIC_API_KEY" in str(e) or "not configured" in str(e):
+            logger.error("AI agent service not configured: ANTHROPIC_API_KEY missing")
+            raise HTTPException(
+                status_code=503,
+                detail="AI service is not configured. Please set ANTHROPIC_API_KEY in your .env file to use the chat agent feature."
+            )
+        logger.exception("chat_finish failed with RuntimeError")
+        raise HTTPException(status_code=500, detail=str(e))
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
@@ -228,10 +264,22 @@ async def deploy_to_supabase(payload: DeployRequest):
     try:
         logger.info(f"Supabase deployment request for project {payload.project_id}")
         
-        # Get PostgreSQL SQL from the spec
-        postgres_sql = payload.spec.get("postgres_sql", "")
-        if not postgres_sql:
-            raise HTTPException(status_code=400, detail="PostgreSQL schema not found in spec. Please ensure schema generation completed successfully.")
+        # Always regenerate PostgreSQL SQL from the current spec to ensure it matches the latest schema
+        # This ensures that any edits made in the visualization are reflected in the deployment
+        from backend.app.services.schema_generator import to_postgres_sql
+        
+        # Check if spec has entities (the current schema state)
+        if not payload.spec.get("entities"):
+            raise HTTPException(status_code=400, detail="No entities found in spec. Please ensure the schema has been generated.")
+        
+        # Regenerate PostgreSQL SQL from the current entities to ensure it's up-to-date
+        logger.info("Regenerating PostgreSQL SQL from current schema entities")
+        postgres_sql = to_postgres_sql(payload.spec)
+        
+        if not postgres_sql or not postgres_sql.strip():
+            raise HTTPException(status_code=400, detail="Failed to generate PostgreSQL schema. Please check your schema entities.")
+        
+        logger.info(f"Generated PostgreSQL SQL ({len(postgres_sql)} characters)")
         
         db_type = DatabaseType.SUPABASE
         

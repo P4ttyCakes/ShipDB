@@ -56,12 +56,27 @@ class SupabaseDeploymentService(BaseDeploymentService):
                     connection_info={
                         "url": settings.SUPABASE_URL,
                         "tables_created": result.get('tables_created', []),
-                        "method": result.get('method', 'unknown')
+                        "method": result.get('method', 'unknown'),
+                        "rls_enabled": result.get('rls_enabled', False)
                     },
                     message=f"Successfully deployed to Supabase: {result.get('message', '')}"
                 )
             else:
-                raise Exception(result.get('error', 'Unknown deployment error'))
+                # Manual execution required - return response with SQL
+                return DeploymentResponse(
+                    deployment_id=request.project_id,
+                    status="pending",
+                    database_type="supabase",
+                    connection_info={
+                        "url": settings.SUPABASE_URL,
+                        "tables_created": [],
+                        "method": "manual",
+                        "sql": result.get('sql', sql_schema),
+                        "expected_tables": result.get('expected_tables', []),
+                        "instructions": result.get('instructions', '')
+                    },
+                    message=f"{result.get('message', '')} {result.get('error', '')}"
+                )
                 
         except Exception as e:
             logger.error(f"Supabase deployment failed: {e}")
@@ -84,18 +99,54 @@ class SupabaseDeploymentService(BaseDeploymentService):
         if self.db_url:
             try:
                 import psycopg2
+                logger.info(f"Attempting direct PostgreSQL connection to execute schema")
                 conn = psycopg2.connect(self.db_url)
                 cursor = conn.cursor()
                 
-                statements = [s.strip() for s in re.split(r';(?!\s*[A-Z])', table_schema) if s.strip()]
-                executed_tables = []
+                # Better SQL statement splitting - handle semicolons properly
+                # Split by semicolon, but preserve multi-line statements
+                statements = []
+                current_statement = []
+                for line in table_schema.split('\n'):
+                    current_statement.append(line)
+                    # Check if line ends with semicolon (not in a string)
+                    if line.strip().endswith(';') and not line.strip().startswith('--'):
+                        stmt = '\n'.join(current_statement).strip()
+                        if stmt:
+                            statements.append(stmt)
+                        current_statement = []
                 
-                for statement in statements:
-                    if statement:
+                # Add any remaining statement
+                if current_statement:
+                    stmt = '\n'.join(current_statement).strip()
+                    if stmt:
+                        statements.append(stmt)
+                
+                executed_tables = []
+                errors = []
+                
+                logger.info(f"Executing {len(statements)} SQL statements")
+                for i, statement in enumerate(statements):
+                    if not statement.strip() or statement.strip().startswith('--'):
+                        continue
+                    try:
+                        logger.debug(f"Executing statement {i+1}/{len(statements)}: {statement[:100]}...")
                         cursor.execute(statement)
-                        match = re.search(r'CREATE TABLE(?: IF NOT EXISTS)?\s+"?(\w+)"?', statement, re.IGNORECASE)
+                        
+                        # Extract table name from CREATE TABLE statements
+                        match = re.search(r'CREATE TABLE(?: IF NOT EXISTS)?\s+["\']?(\w+)["\']?', statement, re.IGNORECASE)
                         if match:
-                            executed_tables.append(match.group(1))
+                            table_name = match.group(1)
+                            executed_tables.append(table_name)
+                            logger.info(f"Created table: {table_name}")
+                    except Exception as stmt_error:
+                        error_msg = f"Statement {i+1} failed: {str(stmt_error)}"
+                        logger.error(error_msg)
+                        errors.append(error_msg)
+                        # Continue with other statements
+                
+                if errors:
+                    logger.warning(f"Some statements failed: {errors}")
                 
                 conn.commit()
                 
@@ -126,73 +177,61 @@ END $$;
                 cursor.close()
                 conn.close()
                 
-                logger.info(f"Successfully executed SQL via PostgreSQL connection")
-                return {
-                    "success": True,
-                    "message": f"Tables created via direct PostgreSQL connection",
-                    "tables_created": executed_tables,
-                    "method": "psycopg2",
-                    "rls_enabled": True
-                }
+                if executed_tables:
+                    logger.info(f"Successfully executed SQL via PostgreSQL connection. Created {len(executed_tables)} tables: {executed_tables}")
+                    return {
+                        "success": True,
+                        "message": f"Successfully created {len(executed_tables)} tables via direct PostgreSQL connection",
+                        "tables_created": executed_tables,
+                        "method": "psycopg2",
+                        "rls_enabled": True,
+                        "errors": errors if errors else None
+                    }
+                else:
+                    raise Exception("No tables were created. Check SQL statements for errors.")
             except Exception as pg_error:
-                logger.warning(f"Direct PostgreSQL connection failed: {pg_error}")
+                logger.error(f"Direct PostgreSQL connection failed: {pg_error}")
+                logger.error(f"Error details: {str(pg_error)}")
         
-        # Method 2: Try exec_sql RPC function via Supabase REST API
+        # Method 2: Try exec_sql RPC function via Supabase REST API (if custom function exists)
+        # Note: This requires a custom RPC function to be created in Supabase
         try:
-            statements = re.split(r';\s*\n', table_schema)
-            executed_tables = []
-            
-            for statement in statements:
-                statement = statement.strip()
-                if statement and statement.upper().startswith('CREATE TABLE'):
-                    match = re.search(r'CREATE TABLE(?: IF NOT EXISTS)?\s+"?(\w+)"?', statement, re.IGNORECASE)
-                    if match:
-                        executed_tables.append(match.group(1))
-            
-            # Call the exec_sql RPC function
+            logger.info("Attempting to execute SQL via exec_sql RPC function")
+            # Call the exec_sql RPC function (if it exists)
             result = self.supabase.rpc('exec_sql', {'query': table_schema}).execute()
             
-            # Enable RLS on all created tables
-            if executed_tables:
-                try:
-                    rls_sql = """
-DO $$
-DECLARE
-    table_record RECORD;
-BEGIN
-    FOR table_record IN
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = 'public'
-        AND table_type = 'BASE TABLE'
-    LOOP
-        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', table_record.table_name);
-    END LOOP;
-END $$;
-"""
-                    rls_result = self.supabase.rpc('exec_sql', {'query': rls_sql}).execute()
-                    logger.info(f"RLS enabled on tables")
-                except Exception as rls_error:
-                    logger.warning(f"Failed to enable RLS: {rls_error}")
+            # Extract table names from the SQL
+            executed_tables = []
+            for match in re.finditer(r'CREATE TABLE(?: IF NOT EXISTS)?\s+["\']?(\w+)["\']?', table_schema, re.IGNORECASE):
+                executed_tables.append(match.group(1))
             
-            logger.info(f"Successfully executed SQL via exec_sql RPC")
+            logger.info(f"Successfully executed SQL via exec_sql RPC. Tables: {executed_tables}")
             return {
                 "success": True,
                 "message": f"Tables created via exec_sql RPC",
                 "tables_created": executed_tables,
                 "method": "exec_sql_rpc",
-                "rls_enabled": True
+                "rls_enabled": False  # RLS would need to be enabled separately
             }
         except Exception as rpc_error:
-            logger.warning(f"exec_sql RPC failed: {rpc_error}")
+            logger.warning(f"exec_sql RPC failed (this is expected if the function doesn't exist): {rpc_error}")
         
-        # Method 3: Fallback - return SQL for manual execution
-        logger.warning("All automatic methods failed, returning SQL for manual execution")
+        # Method 3: Fallback - return SQL for manual execution with detailed instructions
+        logger.warning("All automatic methods failed. SQL must be executed manually.")
+        logger.info(f"Generated SQL schema ({len(table_schema)} characters)")
+        
+        # Extract table names for user information
+        executed_tables = []
+        for match in re.finditer(r'CREATE TABLE(?: IF NOT EXISTS)?\s+["\']?(\w+)["\']?', table_schema, re.IGNORECASE):
+            executed_tables.append(match.group(1))
+        
         return {
-            "success": True,
-            "message": "SQL generated successfully. Please execute manually in Supabase Dashboard",
+            "success": False,
+            "message": "Automatic deployment failed. Please execute SQL manually in Supabase Dashboard.",
             "tables_created": [],
             "method": "manual",
             "sql": table_schema,
-            "instructions": "Copy the SQL above and execute it in Supabase Dashboard > SQL Editor"
+            "expected_tables": executed_tables,
+            "instructions": "To deploy manually:\n1. Go to your Supabase Dashboard\n2. Navigate to SQL Editor\n3. Copy and paste the SQL below\n4. Click 'Run' to execute",
+            "error": "SUPABASE_DB_URL not configured or exec_sql RPC function not available. Please configure SUPABASE_DB_URL in your .env file for automatic deployment, or execute the SQL manually."
         }

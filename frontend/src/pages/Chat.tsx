@@ -213,6 +213,12 @@ const Chat = () => {
           } else {
             errorMessage = `Invalid input: ${errorDetail}`;
           }
+        } else if (response.status === 503) {
+          if (errorDetail.includes('not configured') || errorDetail.includes('ANTHROPIC_API_KEY')) {
+            errorMessage = `AI service is not configured. Please set ANTHROPIC_API_KEY in your backend .env file to use the chat agent feature.`;
+          } else {
+            errorMessage = `Service unavailable: ${errorDetail}. Please try again later.`;
+          }
         } else if (response.status === 500) {
           if (errorDetail.includes('unavailable') || errorDetail.includes('retries')) {
             errorMessage = `AI service temporarily unavailable: ${errorDetail}. Please wait a moment and try again.`;
@@ -280,6 +286,12 @@ const Chat = () => {
             errorMessage = `Your answer doesn't match what was asked. ${errorDetail}. Please read the question carefully and try again.`;
           } else {
             errorMessage = `Invalid input: ${errorDetail}`;
+          }
+        } else if (response.status === 503) {
+          if (errorDetail.includes('not configured') || errorDetail.includes('ANTHROPIC_API_KEY')) {
+            errorMessage = `AI service is not configured. Please set ANTHROPIC_API_KEY in your backend .env file to use the chat agent feature.`;
+          } else {
+            errorMessage = `Service unavailable: ${errorDetail}. Please try again later.`;
           }
         } else if (response.status === 500) {
           if (errorDetail.includes('unavailable') || errorDetail.includes('retries')) {

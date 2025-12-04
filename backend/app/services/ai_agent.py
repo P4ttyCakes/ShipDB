@@ -350,6 +350,7 @@ class AIAgentService:
         """Call Claude with retry/backoff, expecting a control JSON object."""
         max_retries = 3
         base_sleep = 0.5
+        last_error = None
 
         system_txt = self._system_instruction()
         
@@ -394,16 +395,28 @@ class AIAgentService:
                 
             except Exception as e:
                 sleep_s = base_sleep * (2 ** attempt)
+                error_str = str(e)
+                last_error = error_str
+                
+                # Check for specific error types that shouldn't be retried
+                if "credit balance is too low" in error_str or "insufficient credits" in error_str.lower():
+                    logger.error(f"Anthropic API credit issue: {error_str}")
+                    raise RuntimeError("Your Anthropic API account has insufficient credits. Please add credits to your account at https://console.anthropic.com/ to use the chat agent feature.")
+                
+                if "invalid_api_key" in error_str.lower() or "authentication" in error_str.lower():
+                    logger.error(f"Anthropic API authentication issue: {error_str}")
+                    raise RuntimeError("Invalid Anthropic API key. Please check your ANTHROPIC_API_KEY in the .env file.")
+                
                 logger.warning(
-                    "Claude call failed (attempt={}): {}", attempt + 1, str(e)
+                    "Claude call failed (attempt={}): {}", attempt + 1, error_str
                 )
                 if attempt < max_retries - 1:
                     time.sleep(sleep_s)
                     continue
 
         # All retries failed
-        logger.error("All Claude retries failed")
-        raise RuntimeError("AI service unavailable after multiple retries. Please try again later.")
+        logger.error(f"All Claude retries failed. Last error: {last_error}")
+        raise RuntimeError(f"AI service unavailable after multiple retries: {last_error or 'Unknown error'}. Please try again later.")
     
     def _parse_json_response(self, text: str) -> Optional[Dict[str, Any]]:
         """Parse JSON from AI response with robust error handling."""
