@@ -1,0 +1,57 @@
+# Secrets — never bake into images
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.aws/
+.gcp/
+service-account*.json
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/*.so
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/venv/
+**/.venv/
+**/env/
+
+# Node
+**/node_modules/
+**/dist/
+**/.vite/
+**/bun.lockb
+
+# Git / VCS
+.git/
+.gitignore
+.github/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Docs / dev artifacts not needed at runtime
+README.md
+CONTRIBUTING.md
+SETUP.md
+CONFIGURATION.md
+SUPABASE_INTEGRATION.md
+test_resize.html
+start_backend.sh
+start_frontend.sh
+backend/env_template.txt

@@ -8,7 +8,6 @@ from backend.app.services.ai_agent import get_agent
 from backend.app.services.schema_generator import generate_all
 from backend.app.models.deployment import DeploymentRequest, DeploymentResponse, DatabaseType
 from backend.app.services.deployment.factory import DeploymentFactory
-import os
 from backend.app.core.config import settings
 
 router = APIRouter()
@@ -173,12 +172,7 @@ async def deploy_database(payload: DeployRequest):
     """Deploy database schema to AWS DynamoDB"""
     try:
         logger.info(f"Deployment request for project {payload.project_id}")
-        
-        # Use AWS credentials from settings
-        os.environ['AWS_ACCESS_KEY_ID'] = settings.AWS_ACCESS_KEY_ID or os.getenv('AWS_ACCESS_KEY_ID', '')
-        os.environ['AWS_SECRET_ACCESS_KEY'] = settings.AWS_SECRET_ACCESS_KEY or os.getenv('AWS_SECRET_ACCESS_KEY', '')
-        os.environ['AWS_REGION'] = settings.AWS_REGION or 'us-east-1'
-        
+
         # ALWAYS use DynamoDB for deployment (PostgreSQL deployment not yet supported)
         schema_data = payload.spec.get("dynamodb_tables", [])
         if not schema_data:
@@ -192,7 +186,7 @@ async def deploy_database(payload: DeployRequest):
             database_type=db_type,
             database_name=payload.database_name,
             schema_data=schema_data,
-            region=os.getenv('AWS_REGION', 'us-east-1')
+            region=settings.AWS_REGION
         )
         
         # Get appropriate deployment service
@@ -220,6 +214,55 @@ async def deploy_database(payload: DeployRequest):
     except Exception as e:
         logger.exception(f"Deployment failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Deployment failed: {str(e)}")
+
+
+@router.post("/deploy-rds", response_model=DeploymentResponse)
+async def deploy_to_rds(payload: DeployRequest):
+    """Deploy PostgreSQL schema to AWS RDS"""
+    try:
+        logger.info(f"RDS deployment request for project {payload.project_id}")
+
+        # Get PostgreSQL SQL from the spec
+        postgres_sql = payload.spec.get("postgres_sql", "")
+        if not postgres_sql:
+            raise HTTPException(status_code=400, detail="PostgreSQL schema not found in spec. Please ensure schema generation completed successfully.")
+
+        db_type = DatabaseType.POSTGRESQL
+
+        # Create deployment request
+        request = DeploymentRequest(
+            project_id=payload.project_id,
+            database_type=db_type,
+            database_name=payload.database_name,
+            schema_data=postgres_sql,
+            region=settings.AWS_REGION
+        )
+
+        # Get appropriate deployment service
+        service = DeploymentFactory.get_service(db_type)
+
+        if not service:
+            raise HTTPException(status_code=400, detail="PostgreSQL RDS deployment service not available")
+
+        # Validate credentials
+        if not await service.validate_credentials():
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid AWS credentials. Please check your AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
+            )
+
+        # Execute deployment
+        logger.info(f"Starting RDS deployment for project {payload.project_id}")
+        result = await service.deploy(request)
+
+        logger.success(f"RDS deployment completed: {result.deployment_id}")
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"RDS deployment failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"RDS deployment failed: {str(e)}")
 
 
 @router.post("/deploy-supabase", response_model=DeploymentResponse)
@@ -269,3 +312,41 @@ async def deploy_to_supabase(payload: DeployRequest):
     except Exception as e:
         logger.exception(f"Supabase deployment failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Supabase deployment failed: {str(e)}")
+
+
+class TeardownRequest(BaseModel):
+    database_name: str
+
+
+@router.post("/teardown-dynamodb")
+async def teardown_dynamodb(payload: TeardownRequest):
+    """Delete all ShipDB-managed DynamoDB tables for a deployment."""
+    try:
+        from backend.app.services.deployment.dynamodb_service import DynamoDBService
+        service = DynamoDBService()
+        if not await service.validate_credentials():
+            raise HTTPException(status_code=400, detail="Invalid AWS credentials.")
+        deleted = await service.teardown(payload.database_name)
+        return {"deleted_tables": deleted, "count": len(deleted)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"DynamoDB teardown failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Teardown failed: {str(e)}")
+
+
+@router.post("/teardown-rds")
+async def teardown_rds(payload: TeardownRequest):
+    """Delete an RDS instance and its ShipDB-created security group."""
+    try:
+        from backend.app.services.deployment.postgresql_service import PostgreSQLRDSService
+        service = PostgreSQLRDSService()
+        if not await service.validate_credentials():
+            raise HTTPException(status_code=400, detail="Invalid AWS credentials.")
+        await service.teardown(payload.database_name)
+        return {"deleted_instance": payload.database_name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"RDS teardown failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Teardown failed: {str(e)}")

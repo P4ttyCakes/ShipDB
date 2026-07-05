@@ -191,7 +191,8 @@ def to_postgres_sql(spec: Dict[str, Any]) -> str:
         # Handle composite unique constraints
         for uq in ent.get("unique", []) or []:
             if isinstance(uq, list) and uq:
-                uniques.append(f"UNIQUE ({', '.join([f'\"{c}\"' for c in uq])})")
+                quoted = ", ".join(f'"{c}"' for c in uq)
+                uniques.append(f"UNIQUE ({quoted})")
         
         # Handle foreign keys at entity level
         for fk in ent.get("foreign_keys", []) or []:

@@ -8,9 +8,9 @@ except ImportError:  # when run from repo root
     from backend.app.core.config import settings
 
 try:
-    from app.api.routes import projects, schema, deploy, visualization
+    from app.api.routes import projects, schema, visualization
 except ImportError:
-    from backend.app.api.routes import projects, schema, deploy, visualization
+    from backend.app.api.routes import projects, schema, visualization
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -31,7 +31,6 @@ app.add_middleware(
 # Include routers
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(schema.router, prefix="/api/schema", tags=["schema"])
-app.include_router(deploy.router, prefix="/api/deploy", tags=["deploy"])
 app.include_router(visualization.router, prefix="/api/visualization", tags=["visualization"])
 
 

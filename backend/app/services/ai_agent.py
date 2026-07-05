@@ -1,7 +1,9 @@
 import json
+import math
 import re
 import threading
 import time
+from collections import Counter
 from typing import Dict, Any, Optional, List
 from uuid import uuid4
 
@@ -11,8 +13,66 @@ from backend.app.core.config import settings
 try:
     # Anthropic SDK for Claude
     from anthropic import Anthropic
-except Exception:  # pragma: no cover 
+except Exception:  # pragma: no cover
     Anthropic = None  # type: ignore
+
+
+# Reference phrases the model tends to use when it believes the conversation is complete.
+_COMPLETION_REFERENCE_PHRASES = [
+    "perfect i have enough information to create your database design",
+    "great i now have everything i need to design your database",
+    "excellent based on what you've told me i can create your database schema",
+    "i have enough information to create the schema",
+    "i can create your database schema now",
+    "ready to design your database",
+    "i have everything i need to design this",
+]
+_COMPLETION_SIMILARITY_THRESHOLD = 0.45
+_TOKEN_RE = re.compile(r"[a-z']+")
+_STOPWORDS = {
+    "a", "an", "the", "i", "you", "your", "yours", "me", "my", "to", "of", "on", "in", "for",
+    "and", "or", "is", "are", "be", "can", "now", "this", "that", "what", "based",
+}
+
+
+def _tokenize(text: str) -> List[str]:
+    """Lowercase word tokenizer with stopword removal used by the TF-IDF completion detector."""
+    return [t for t in _TOKEN_RE.findall(text.lower()) if t not in _STOPWORDS]
+
+
+def _build_idf(documents: List[List[str]]) -> Dict[str, float]:
+    """Compute inverse-document-frequency weights over a small reference corpus."""
+    doc_count = len(documents)
+    doc_freq: Counter = Counter()
+    for tokens in documents:
+        for term in set(tokens):
+            doc_freq[term] += 1
+    return {term: math.log((1 + doc_count) / (1 + freq)) + 1.0 for term, freq in doc_freq.items()}
+
+
+def _tfidf_vector(tokens: List[str], idf: Dict[str, float]) -> Dict[str, float]:
+    """Build a sparse TF-IDF vector for a token list given precomputed IDF weights."""
+    term_freq = Counter(tokens)
+    total = sum(term_freq.values()) or 1
+    return {term: (count / total) * idf.get(term, 1.0) for term, count in term_freq.items()}
+
+
+def _cosine_similarity(vec_a: Dict[str, float], vec_b: Dict[str, float]) -> float:
+    """Cosine similarity between two sparse TF-IDF vectors."""
+    shared_terms = set(vec_a) & set(vec_b)
+    if not shared_terms:
+        return 0.0
+    dot = sum(vec_a[t] * vec_b[t] for t in shared_terms)
+    norm_a = math.sqrt(sum(v * v for v in vec_a.values()))
+    norm_b = math.sqrt(sum(v * v for v in vec_b.values()))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+_COMPLETION_REFERENCE_TOKENS = [_tokenize(phrase) for phrase in _COMPLETION_REFERENCE_PHRASES]
+_COMPLETION_IDF = _build_idf(_COMPLETION_REFERENCE_TOKENS)
+_COMPLETION_REFERENCE_VECTORS = [_tfidf_vector(tokens, _COMPLETION_IDF) for tokens in _COMPLETION_REFERENCE_TOKENS]
 
 
 class AIAgentService:
@@ -268,11 +328,15 @@ class AIAgentService:
             if entity_name in entity_map:
                 # Update existing entity - merge fields intelligently
                 existing_entity = entity_map[entity_name]
-                existing_entity.update(incoming_entity)  # Update all fields
-                
-                # Merge fields if both have fields
+                # Merge fields BEFORE update() overwrites existing_entity["fields"],
+                # otherwise both merge_fields() args end up pointing at the same list
+                # and the old fields are lost.
+                merged_fields = None
                 if "fields" in incoming_entity and "fields" in existing_entity:
-                    existing_entity["fields"] = self._merge_fields(existing_entity["fields"], incoming_entity["fields"])
+                    merged_fields = self._merge_fields(existing_entity["fields"], incoming_entity["fields"])
+                existing_entity.update(incoming_entity)  # Update all fields
+                if merged_fields is not None:
+                    existing_entity["fields"] = merged_fields
             else:
                 # Add new entity
                 entity_map[entity_name] = incoming_entity
@@ -361,7 +425,7 @@ class AIAgentService:
                     system=system_txt,
                     messages=msgs,
                     max_tokens=4000,
-                    temperature=0.0,
+                    temperature=0.2,
                     timeout=30.0,
                 )
                 
@@ -393,16 +457,17 @@ class AIAgentService:
                 return obj
                 
             except Exception as e:
+                import traceback, sys
                 sleep_s = base_sleep * (2 ** attempt)
-                logger.warning(
-                    "Claude call failed (attempt={}): {}", attempt + 1, str(e)
-                )
+                print(f"[AI_AGENT] Claude call failed (attempt={attempt+1}/{max_retries}): {type(e).__name__}: {e}", flush=True)
+                print(traceback.format_exc(), flush=True)
+                sys.stdout.flush()
                 if attempt < max_retries - 1:
                     time.sleep(sleep_s)
                     continue
 
         # All retries failed
-        logger.error("All Claude retries failed")
+        print(f"[AI_AGENT] All retries failed. model={self._model_name}", flush=True)
         raise RuntimeError("AI service unavailable after multiple retries. Please try again later.")
     
     def _parse_json_response(self, text: str) -> Optional[Dict[str, Any]]:
@@ -600,19 +665,22 @@ class AIAgentService:
         return {"session_id": session_id, "prompt": first_question}
 
     def _detect_completion_phrases(self, text: str) -> bool:
-        """Detect if the AI agent is using completion phrases that indicate conversation should end."""
-        completion_phrases = [
-            "perfect! i have enough information",
-            "great! i now have everything i need",
-            "excellent! based on what you've told me",
-            "i have enough information to create",
-            "i can create your database schema",
-            "ready to design your database",
-            "i have everything i need to design"
-        ]
-        
-        text_lower = text.lower()
-        return any(phrase in text_lower for phrase in completion_phrases)
+        """Detect completion intent via TF-IDF cosine similarity against reference completion phrases.
+
+        Catches paraphrases the model uses ("All set, I can build this now") that exact
+        substring matching would miss, while staying a cheap, dependency-free classic NLP technique.
+        """
+        if not text or not text.strip():
+            return False
+        tokens = _tokenize(text)
+        if not tokens:
+            return False
+        vec = _tfidf_vector(tokens, _COMPLETION_IDF)
+        max_similarity = max(
+            (_cosine_similarity(vec, ref_vec) for ref_vec in _COMPLETION_REFERENCE_VECTORS),
+            default=0.0,
+        )
+        return max_similarity >= _COMPLETION_SIMILARITY_THRESHOLD
 
     def next_turn(self, session_id: str, answer: str) -> Dict[str, Any]:
         """Advance the conversation with the user's answer and return the next question and merged spec."""

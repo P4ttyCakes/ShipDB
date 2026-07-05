@@ -39,7 +39,7 @@ const Chat = () => {
   const [showDeployDialog, setShowDeployDialog] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
   const [databaseName, setDatabaseName] = useState("");
-  const [deploymentType, setDeploymentType] = useState<'dynamodb' | 'supabase'>('dynamodb');
+  const [deploymentType, setDeploymentType] = useState<'dynamodb' | 'supabase' | 'rds'>('dynamodb');
   const [selectedDeployment, setSelectedDeployment] = useState<'nosql' | 'postgresql' | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chartDBViewerRef = useRef<ChartDBViewerRef>(null);
@@ -236,8 +236,13 @@ const Chat = () => {
           setIsDeploying(false);
           return;
         }
-        endpoint = `${API_BASE_URL}/api/projects/deploy-supabase`;
-        dbType = 'supabase';
+        if (deploymentType === 'rds') {
+          endpoint = `${API_BASE_URL}/api/projects/deploy-rds`;
+          dbType = 'postgresql';
+        } else {
+          endpoint = `${API_BASE_URL}/api/projects/deploy-supabase`;
+          dbType = 'supabase';
+        }
       }
 
       const response = await fetch(endpoint, {
@@ -545,7 +550,7 @@ const Chat = () => {
             {generatedSchema && generatedSchema.dynamodb_tables && generatedSchema.postgres_sql && (
               <div className="space-y-3">
                 <Label>Database Type</Label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <Button
                     onClick={() => setDeploymentType('dynamodb')}
                     variant={deploymentType === 'dynamodb' ? 'default' : 'outline'}
@@ -555,9 +560,9 @@ const Chat = () => {
                         : ''
                     }`}
                   >
-                    NoSQL (DynamoDB)
+                    PostgreSQL (AWS Lambda)
                   </Button>
-                  
+
                   <Button
                     onClick={() => setDeploymentType('supabase')}
                     variant={deploymentType === 'supabase' ? 'default' : 'outline'}
@@ -568,6 +573,18 @@ const Chat = () => {
                     }`}
                   >
                     PostgreSQL (Supabase)
+                  </Button>
+
+                  <Button
+                    onClick={() => setDeploymentType('rds')}
+                    variant={deploymentType === 'rds' ? 'default' : 'outline'}
+                    className={`transition-all duration-300 ${
+                      deploymentType === 'rds'
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
+                        : ''
+                    }`}
+                  >
+                    PostgreSQL (AWS RDS)
                   </Button>
                 </div>
               </div>

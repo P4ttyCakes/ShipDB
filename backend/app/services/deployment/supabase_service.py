@@ -61,7 +61,10 @@ class SupabaseDeploymentService(BaseDeploymentService):
                     message=f"Successfully deployed to Supabase: {result.get('message', '')}"
                 )
             else:
-                raise Exception(result.get('error', 'Unknown deployment error'))
+                detail = result.get('error') or result.get('message') or 'Unknown deployment error'
+                if result.get('instructions'):
+                    detail = f"{detail} {result['instructions']}"
+                raise Exception(detail)
                 
         except Exception as e:
             logger.error(f"Supabase deployment failed: {e}")
@@ -186,11 +189,11 @@ END $$;
         except Exception as rpc_error:
             logger.warning(f"exec_sql RPC failed: {rpc_error}")
         
-        # Method 3: Fallback - return SQL for manual execution
+        # Method 3: Fallback - nothing was actually deployed; caller must run this SQL manually
         logger.warning("All automatic methods failed, returning SQL for manual execution")
         return {
-            "success": True,
-            "message": "SQL generated successfully. Please execute manually in Supabase Dashboard",
+            "success": False,
+            "message": "Automatic deployment failed. SQL generated for manual execution in Supabase Dashboard",
             "tables_created": [],
             "method": "manual",
             "sql": table_schema,

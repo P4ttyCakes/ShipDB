@@ -12,9 +12,13 @@ ENV/
 dist/
 build/
 
-# Environment variables
+# Environment variables — never commit secrets
 .env
-.env.local
+.env.*
+!.env.example
+!env_template.txt
+**/.env
+**/.env.*
 
 # IDE
 .vscode/
