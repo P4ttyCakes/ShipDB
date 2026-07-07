@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
-from backend.app.models.deployment import DeploymentRequest, DeploymentResponse
+try:  # when run from backend/
+    from app.models.deployment import DeploymentRequest, DeploymentResponse
+except ImportError:  # when run from repo root
+    from backend.app.models.deployment import DeploymentRequest, DeploymentResponse
 
 
 class BaseDeploymentService(ABC):

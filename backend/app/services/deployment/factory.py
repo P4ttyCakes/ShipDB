@@ -1,4 +1,7 @@
-from backend.app.models.deployment import DatabaseType, DeploymentRequest
+try:  # when run from backend/
+    from app.models.deployment import DatabaseType, DeploymentRequest
+except ImportError:  # when run from repo root
+    from backend.app.models.deployment import DatabaseType, DeploymentRequest
 from .postgresql_service import PostgreSQLRDSService
 from .dynamodb_service import DynamoDBService
 from .supabase_service import SupabaseDeploymentService

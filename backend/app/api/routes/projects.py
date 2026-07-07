@@ -4,11 +4,18 @@ from typing import Optional, Dict, Any
 import uuid
 from loguru import logger
 
-from backend.app.services.ai_agent import get_agent
-from backend.app.services.schema_generator import generate_all
-from backend.app.models.deployment import DeploymentRequest, DeploymentResponse, DatabaseType
-from backend.app.services.deployment.factory import DeploymentFactory
-from backend.app.core.config import settings
+try:  # when run from backend/
+    from app.services.ai_agent import get_agent
+    from app.services.schema_generator import generate_all
+    from app.models.deployment import DeploymentRequest, DeploymentResponse, DatabaseType
+    from app.services.deployment.factory import DeploymentFactory
+    from app.core.config import settings
+except ImportError:  # when run from repo root
+    from backend.app.services.ai_agent import get_agent
+    from backend.app.services.schema_generator import generate_all
+    from backend.app.models.deployment import DeploymentRequest, DeploymentResponse, DatabaseType
+    from backend.app.services.deployment.factory import DeploymentFactory
+    from backend.app.core.config import settings
 
 router = APIRouter()
 

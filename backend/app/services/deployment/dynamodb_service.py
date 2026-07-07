@@ -1,8 +1,13 @@
 import boto3
 from typing import List
-from backend.app.core.config import settings
-from backend.app.services.deployment.base import BaseDeploymentService
-from backend.app.models.deployment import DeploymentRequest, DeploymentResponse
+try:  # when run from backend/
+    from app.core.config import settings
+    from app.services.deployment.base import BaseDeploymentService
+    from app.models.deployment import DeploymentRequest, DeploymentResponse
+except ImportError:  # when run from repo root
+    from backend.app.core.config import settings
+    from backend.app.services.deployment.base import BaseDeploymentService
+    from backend.app.models.deployment import DeploymentRequest, DeploymentResponse
 from loguru import logger
 
 

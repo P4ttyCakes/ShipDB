@@ -8,7 +8,11 @@ from typing import Dict, Any, Optional, List
 from uuid import uuid4
 
 from loguru import logger
-from backend.app.core.config import settings
+
+try:
+    from app.core.config import settings  # when run from backend/
+except ImportError:  # when run from repo root
+    from backend.app.core.config import settings
 
 try:
     # Anthropic SDK for Claude

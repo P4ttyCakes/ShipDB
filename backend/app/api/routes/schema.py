@@ -3,8 +3,12 @@ from fastapi import Body
 from loguru import logger
 from typing import Any, Dict
 
-from backend.app.services.schema_generator import generate_all, validate_spec, to_postgres_sql
-from backend.app.services import ai_agent
+try:  # when run from backend/
+    from app.services.schema_generator import generate_all, validate_spec, to_postgres_sql
+    from app.services import ai_agent
+except ImportError:  # when run from repo root
+    from backend.app.services.schema_generator import generate_all, validate_spec, to_postgres_sql
+    from backend.app.services import ai_agent
 
 router = APIRouter()
 

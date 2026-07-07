@@ -4,9 +4,14 @@ import re
 from typing import Dict, Any
 from loguru import logger
 
-from backend.app.services.deployment.base import BaseDeploymentService
-from backend.app.models.deployment import DeploymentRequest, DeploymentResponse
-from backend.app.core.config import settings
+try:  # when run from backend/
+    from app.services.deployment.base import BaseDeploymentService
+    from app.models.deployment import DeploymentRequest, DeploymentResponse
+    from app.core.config import settings
+except ImportError:  # when run from repo root
+    from backend.app.services.deployment.base import BaseDeploymentService
+    from backend.app.models.deployment import DeploymentRequest, DeploymentResponse
+    from backend.app.core.config import settings
 
 
 class SupabaseDeploymentService(BaseDeploymentService):

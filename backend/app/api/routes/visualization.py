@@ -2,7 +2,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 from loguru import logger
-from backend.app.core.config import settings
+try:  # when run from backend/
+    from app.core.config import settings
+except ImportError:  # when run from repo root
+    from backend.app.core.config import settings
 
 router = APIRouter()
 

@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Send, Loader2, Maximize2, Rocket } from "lucide-react";
+import { Send, Loader2, Maximize2, Rocket, Copy, Download } from "lucide-react";
 import { toast } from "sonner";
 import { ChartDBViewer, ChartDBViewerRef } from "@/components/ChartDBViewer";
+import { uploadSchema } from "@/lib/uploadSchema";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -504,9 +505,32 @@ const Chat = () => {
 
               <TabsContent value="postgres" className="flex-1 overflow-y-auto mt-4">
                 {generatedSchema.postgres_sql ? (
-                  <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm font-mono">
-                    {generatedSchema.postgres_sql}
-                  </pre>
+                  <div className="space-y-3">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          navigator.clipboard.writeText(generatedSchema.postgres_sql);
+                          toast.success("SQL copied to clipboard");
+                        }}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => uploadSchema(generatedSchema.postgres_sql)}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                         Send to S3(test)
+                      </Button>
+                    </div>
+                    <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm font-mono">
+                      {generatedSchema.postgres_sql}
+                    </pre>
+                  </div>
                 ) : (
                   <p className="text-muted-foreground">PostgreSQL schema not yet generated.</p>
                 )}

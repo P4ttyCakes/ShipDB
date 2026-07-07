@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     
     # Anthropic (Claude)
     ANTHROPIC_API_KEY: Optional[str] = None
-    ANTHROPIC_MODEL: str = "claude-3-haiku-20240307"
+    ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
     ANTHROPIC_FALLBACK_MODEL: Optional[str] = None
     
     # AWS
